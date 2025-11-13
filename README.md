@@ -7,18 +7,18 @@
 このツールは以下の処理を自動化します：
 
 1. YouTubeから指定時刻の動画を直接ダウンロード・切り抜き
-2. YouTubeから字幕を取得
-3. 字幕を切り抜き区間に合わせて調整（リベース）
-4. YouTubeからライブチャットリプレイを取得
-5. チャットを切り抜き区間で抽出・整形
-6. チャットをライブチャット風のオーバーレイ（ASS字幕）として生成
-7. 切り抜き動画に字幕とチャットオーバーレイを合成
+2. Whisper（OpenAI）で音声認識による高精度字幕生成
+3. YouTubeからライブチャットリプレイを取得
+4. チャットを切り抜き区間で抽出・整形
+5. チャットをライブチャット風のオーバーレイ（ASS字幕）として生成
+6. 切り抜き動画に字幕とチャットオーバーレイを合成
 
 ## 必要な環境
 
 - Python 3.8以上
-- FFmpeg（動画合成用）
-- yt-dlp（YouTube動画・字幕・チャット取得用）
+- FFmpeg（動画合成・音声抽出用）
+- yt-dlp（YouTube動画・チャット取得用）
+- OpenAI Whisper（音声認識による字幕生成）
 
 ## インストール
 
@@ -127,51 +127,52 @@ python main.py step0 https://www.youtube.com/watch?v=xxxxx \
   --full
 ```
 
-#### ステップ1: 字幕取得
+#### ステップ1: Whisper字幕生成
+
+切り抜き済み動画から音声認識で字幕を生成：
 
 ```bash
-python main.py step1 https://www.youtube.com/watch?v=xxxxx -o data/temp/subs_full.srt
-```
-
-#### ステップ2: 字幕リベース
-
-```bash
-python main.py step2 \
-  -i data/temp/subs_full.srt \
+python main.py step1 \
+  -i data/temp/clip.webm \
   -o data/temp/subs_clip.srt \
-  -s 00:05:30 \
-  -e 00:10:45
+  -m large
 ```
 
-#### ステップ3: チャット取得
+モデルサイズのオプション:
+- `tiny`, `base`: 高速だが精度低
+- `small`: バランス型
+- `medium`: 高精度
+- `large`: 最高精度（推奨、デフォルト）
+
+#### ステップ2: チャット取得
 
 ```bash
-python main.py step3 https://www.youtube.com/watch?v=xxxxx -o data/temp/chat_full.json
+python main.py step2 https://www.youtube.com/watch?v=xxxxx -o data/temp/chat_full.json
 ```
 
-#### ステップ4: チャット抽出
+#### ステップ3: チャット抽出
 
 ```bash
-python main.py step4 \
+python main.py step3 \
   -i data/temp/chat_full.json \
   -o data/temp/chat_clip.json \
   -s 00:05:30 \
   -e 00:10:45
 ```
 
-#### ステップ5: オーバーレイ生成
+#### ステップ4: オーバーレイ生成
 
 ```bash
-python main.py step5 \
+python main.py step4 \
   -i data/temp/chat_clip.json \
   -o data/temp/chat_overlay.ass
 ```
 
-#### ステップ6: 動画合成
+#### ステップ5: 動画合成
 
 ```bash
-python main.py step6 \
-  -v data/input/clip.webm \
+python main.py step5 \
+  -v data/temp/clip.webm \
   -o data/output/final.mp4 \
   -s data/temp/subs_clip.srt \
   -c data/temp/chat_overlay.ass
@@ -191,18 +192,17 @@ KIRINUKI/
 │   └── temp/                        # 一時ファイル
 └── kirinuki_processor/
     ├── __init__.py
-    ├── steps/                       # 各処理ステップ
-    │   ├── step0_config.py          # 設定読み込み
-    │   ├── step0_download_clip.py   # 動画ダウンロード・切り抜き
-    │   ├── step1_fetch_subtitles.py # 字幕取得
-    │   ├── step2_rebase_subtitles.py# 字幕リベース
-    │   ├── step3_fetch_chat.py      # チャット取得
-    │   ├── step4_extract_chat.py    # チャット抽出
-    │   ├── step5_generate_overlay.py# オーバーレイ生成
-    │   └── step6_compose_video.py   # 動画合成
-    ├── utils/                       # ユーティリティ
-    │   └── time_utils.py            # 時間変換
-    └── tests/                       # テスト
+    ├── steps/                        # 各処理ステップ
+    │   ├── step0_config.py           # 設定読み込み
+    │   ├── step0_download_clip.py    # 動画ダウンロード・切り抜き
+    │   ├── step1_generate_subtitles.py # Whisper字幕生成
+    │   ├── step3_fetch_chat.py       # チャット取得
+    │   ├── step4_extract_chat.py     # チャット抽出
+    │   ├── step5_generate_overlay.py # オーバーレイ生成
+    │   └── step6_compose_video.py    # 動画合成
+    ├── utils/                        # ユーティリティ
+    │   └── time_utils.py             # 時間変換
+    └── tests/                        # テスト
         ├── test_time_utils.py
         └── test_config.py
 ```

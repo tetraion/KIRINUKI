@@ -3,6 +3,11 @@
 # YouTube関連
 yt-dlp>=2024.0.0
 
+# 音声認識
+openai-whisper>=20231117
+torch>=2.0.0
+torchaudio>=2.0.0
+
 # テスト
 pytest>=7.0.0
 pytest-cov>=4.0.0

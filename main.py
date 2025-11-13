@@ -19,8 +19,7 @@ from kirinuki_processor.steps.step0_config import (
     ClipConfig
 )
 from kirinuki_processor.steps.step0_download_clip import download_and_clip_video
-from kirinuki_processor.steps.step1_fetch_subtitles import fetch_subtitles
-from kirinuki_processor.steps.step2_rebase_subtitles import rebase_subtitle_file
+from kirinuki_processor.steps.step1_generate_subtitles import generate_subtitles_with_whisper
 from kirinuki_processor.steps.step3_fetch_chat import fetch_chat
 from kirinuki_processor.steps.step4_extract_chat import load_and_extract_chat
 from kirinuki_processor.steps.step5_generate_overlay import (
@@ -107,56 +106,42 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
             return False
         video_source_path = config.webm_path
 
-    # ステップ1: 字幕取得
+    # ステップ1: Whisper字幕生成
     if 1 not in skip_steps:
-        print("\n[Step 1] Fetching subtitles from YouTube...")
+        print("\n[Step 1] Generating subtitles with Whisper...")
         try:
-            success = fetch_subtitles(config.video_url, subs_full_path)
+            success = generate_subtitles_with_whisper(
+                video_source_path,
+                subs_clip_path,
+                model_size="large",
+                language="ja"
+            )
             if not success:
-                print("  Note: Subtitles not available, will proceed without them")
-                subs_full_path = None
+                print("  Note: Failed to generate subtitles, will proceed without them")
+                subs_clip_path = None
         except Exception as e:
             print(f"✗ Error in Step 1: {e}")
-            subs_full_path = None
+            subs_clip_path = None
     else:
         print("\n[Step 1] Skipped")
 
-    # ステップ2: 字幕リベース
-    if 2 not in skip_steps and subs_full_path and os.path.exists(subs_full_path):
-        print("\n[Step 2] Rebasing subtitles...")
-        try:
-            count = rebase_subtitle_file(
-                subs_full_path,
-                subs_clip_path,
-                config.start_time,
-                config.end_time
-            )
-            if count == 0:
-                subs_clip_path = None
-        except Exception as e:
-            print(f"✗ Error in Step 2: {e}")
-            subs_clip_path = None
-    else:
-        print("\n[Step 2] Skipped (no subtitles available)")
-        subs_clip_path = None
-
-    # ステップ3: チャット取得
-    if 3 not in skip_steps:
-        print("\n[Step 3] Fetching live chat from YouTube...")
+    # ステップ2: チャット取得
+    if 2 not in skip_steps:
+        print("\n[Step 2] Fetching live chat from YouTube...")
         try:
             success = fetch_chat(config.video_url, chat_full_path)
             if not success:
                 print("  Note: Chat replay not available, will proceed without it")
                 chat_full_path = None
         except Exception as e:
-            print(f"✗ Error in Step 3: {e}")
+            print(f"✗ Error in Step 2: {e}")
             chat_full_path = None
     else:
-        print("\n[Step 3] Skipped")
+        print("\n[Step 2] Skipped")
 
-    # ステップ4: チャット抽出
-    if 4 not in skip_steps and chat_full_path and os.path.exists(chat_full_path):
-        print("\n[Step 4] Extracting chat messages for clip...")
+    # ステップ3: チャット抽出
+    if 3 not in skip_steps and chat_full_path and os.path.exists(chat_full_path):
+        print("\n[Step 3] Extracting chat messages for clip...")
         try:
             count = load_and_extract_chat(
                 chat_full_path,
@@ -167,15 +152,15 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
             if count == 0:
                 chat_clip_path = None
         except Exception as e:
-            print(f"✗ Error in Step 4: {e}")
+            print(f"✗ Error in Step 3: {e}")
             chat_clip_path = None
     else:
-        print("\n[Step 4] Skipped (no chat available)")
+        print("\n[Step 3] Skipped (no chat available)")
         chat_clip_path = None
 
-    # ステップ5: オーバーレイ生成
-    if 5 not in skip_steps and chat_clip_path and os.path.exists(chat_clip_path):
-        print("\n[Step 5] Generating chat overlay (ASS)...")
+    # ステップ4: オーバーレイ生成
+    if 4 not in skip_steps and chat_clip_path and os.path.exists(chat_clip_path):
+        print("\n[Step 4] Generating chat overlay (ASS)...")
         try:
             overlay_config = OverlayConfig()
             count = generate_overlay_from_file(
@@ -186,15 +171,15 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
             if count == 0:
                 chat_overlay_path = None
         except Exception as e:
-            print(f"✗ Error in Step 5: {e}")
+            print(f"✗ Error in Step 4: {e}")
             chat_overlay_path = None
     else:
-        print("\n[Step 5] Skipped (no chat available)")
+        print("\n[Step 4] Skipped (no chat available)")
         chat_overlay_path = None
 
-    # ステップ6: 動画合成
-    if 6 not in skip_steps:
-        print("\n[Step 6] Composing final video...")
+    # ステップ5: 動画合成
+    if 5 not in skip_steps:
+        print("\n[Step 5] Composing final video...")
         try:
             success = compose_video(
                 video_source_path,
@@ -244,26 +229,21 @@ def run_single_step(step_num: int, args: argparse.Namespace) -> bool:
         return success
 
     elif step_num == 1:
-        # 字幕取得
-        success = fetch_subtitles(args.url, args.output)
+        # Whisper字幕生成
+        success = generate_subtitles_with_whisper(
+            args.input,
+            args.output,
+            model_size=args.model if hasattr(args, 'model') else "large",
+            language=args.language if hasattr(args, 'language') else "ja"
+        )
         return success
 
     elif step_num == 2:
-        # 字幕リベース
-        count = rebase_subtitle_file(
-            args.input,
-            args.output,
-            args.start,
-            args.end
-        )
-        return count > 0
-
-    elif step_num == 3:
         # チャット取得
         success = fetch_chat(args.url, args.output)
         return success
 
-    elif step_num == 4:
+    elif step_num == 3:
         # チャット抽出
         count = load_and_extract_chat(
             args.input,
@@ -273,7 +253,7 @@ def run_single_step(step_num: int, args: argparse.Namespace) -> bool:
         )
         return count > 0
 
-    elif step_num == 5:
+    elif step_num == 4:
         # オーバーレイ生成
         config = OverlayConfig()
         count = generate_overlay_from_file(
@@ -283,7 +263,7 @@ def run_single_step(step_num: int, args: argparse.Namespace) -> bool:
         )
         return count > 0
 
-    elif step_num == 6:
+    elif step_num == 5:
         # 動画合成
         success = compose_video(
             args.video,
@@ -333,42 +313,36 @@ def main():
     step0_parser.add_argument("-o", "--output", required=True, help="Output video file")
     step0_parser.add_argument("--full", action="store_true", help="Download full video first (slower but more reliable)")
 
-    # Step 1
-    step1_parser = subparsers.add_parser("step1", help="Fetch subtitles")
-    step1_parser.add_argument("url", help="YouTube video URL")
+    # Step 1 (Whisper字幕生成)
+    step1_parser = subparsers.add_parser("step1", help="Generate subtitles with Whisper")
+    step1_parser.add_argument("-i", "--input", required=True, help="Input video file")
     step1_parser.add_argument("-o", "--output", required=True, help="Output SRT file")
+    step1_parser.add_argument("-m", "--model", default="large", choices=["tiny", "base", "small", "medium", "large"], help="Whisper model size (default: large)")
+    step1_parser.add_argument("-l", "--language", default="ja", help="Language code (default: ja)")
 
-    # Step 2
-    step2_parser = subparsers.add_parser("step2", help="Rebase subtitles")
-    step2_parser.add_argument("-i", "--input", required=True, help="Input SRT file")
-    step2_parser.add_argument("-o", "--output", required=True, help="Output SRT file")
-    step2_parser.add_argument("-s", "--start", required=True, help="Start time (hh:mm:ss)")
-    step2_parser.add_argument("-e", "--end", help="End time (hh:mm:ss)")
+    # Step 2 (チャット取得)
+    step2_parser = subparsers.add_parser("step2", help="Fetch live chat")
+    step2_parser.add_argument("url", help="YouTube video URL")
+    step2_parser.add_argument("-o", "--output", required=True, help="Output JSON file")
 
-    # Step 3
-    step3_parser = subparsers.add_parser("step3", help="Fetch live chat")
-    step3_parser.add_argument("url", help="YouTube video URL")
+    # Step 3 (チャット抽出)
+    step3_parser = subparsers.add_parser("step3", help="Extract chat")
+    step3_parser.add_argument("-i", "--input", required=True, help="Input JSON file")
     step3_parser.add_argument("-o", "--output", required=True, help="Output JSON file")
+    step3_parser.add_argument("-s", "--start", required=True, help="Start time (hh:mm:ss)")
+    step3_parser.add_argument("-e", "--end", help="End time (hh:mm:ss)")
 
-    # Step 4
-    step4_parser = subparsers.add_parser("step4", help="Extract chat")
+    # Step 4 (オーバーレイ生成)
+    step4_parser = subparsers.add_parser("step4", help="Generate overlay")
     step4_parser.add_argument("-i", "--input", required=True, help="Input JSON file")
-    step4_parser.add_argument("-o", "--output", required=True, help="Output JSON file")
-    step4_parser.add_argument("-s", "--start", required=True, help="Start time (hh:mm:ss)")
-    step4_parser.add_argument("-e", "--end", help="End time (hh:mm:ss)")
+    step4_parser.add_argument("-o", "--output", required=True, help="Output ASS file")
 
-    # Step 5
-    step5_parser = subparsers.add_parser("step5", help="Generate overlay")
-    step5_parser.add_argument("-i", "--input", required=True, help="Input JSON file")
-    step5_parser.add_argument("-o", "--output", required=True, help="Output ASS file")
-    step5_parser.add_argument("--scroll", action="store_true", help="Use scroll mode")
-
-    # Step 6
-    step6_parser = subparsers.add_parser("step6", help="Compose video")
-    step6_parser.add_argument("-v", "--video", required=True, help="Input video file")
-    step6_parser.add_argument("-o", "--output", required=True, help="Output video file")
-    step6_parser.add_argument("-s", "--subtitle", help="Subtitle file (SRT)")
-    step6_parser.add_argument("-c", "--overlay", help="Chat overlay file (ASS)")
+    # Step 5 (動画合成)
+    step5_parser = subparsers.add_parser("step5", help="Compose video")
+    step5_parser.add_argument("-v", "--video", required=True, help="Input video file")
+    step5_parser.add_argument("-o", "--output", required=True, help="Output video file")
+    step5_parser.add_argument("-s", "--subtitle", help="Subtitle file (SRT)")
+    step5_parser.add_argument("-c", "--overlay", help="Chat overlay file (ASS)")
 
     args = parser.parse_args()
 
