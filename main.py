@@ -181,8 +181,7 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
             count = generate_overlay_from_file(
                 chat_clip_path,
                 chat_overlay_path,
-                overlay_config,
-                scroll_mode=False  # 固定位置モード
+                overlay_config
             )
             if count == 0:
                 chat_overlay_path = None
@@ -280,8 +279,7 @@ def run_single_step(step_num: int, args: argparse.Namespace) -> bool:
         count = generate_overlay_from_file(
             args.input,
             args.output,
-            config,
-            scroll_mode=args.scroll if hasattr(args, 'scroll') else False
+            config
         )
         return count > 0
 
