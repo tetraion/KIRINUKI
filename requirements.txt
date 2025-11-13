@@ -1,0 +1,8 @@
+# KIRINUKI Processor 依存パッケージ
+
+# YouTube関連
+yt-dlp>=2024.0.0
+
+# テスト
+pytest>=7.0.0
+pytest-cov>=4.0.0

@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+data/temp/*
+data/output/*
+data/input/*
+!data/temp/.gitkeep
+!data/output/.gitkeep
+!data/input/.gitkeep
+
+# Config files with sensitive data
+config.txt
+.mcp.json
+
+# Temporary test files
+便利ツール/
