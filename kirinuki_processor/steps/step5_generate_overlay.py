@@ -19,15 +19,15 @@ class OverlayConfig:
     video_width: int = 1920
     video_height: int = 1080
 
-    # チャット表示エリア（右側）
+    # チャット表示エリア（右上）
     chat_area_width: int = 400
     chat_area_x: int = 1520  # 右端から400pxの位置
-    chat_area_y_start: int = 950  # 下部から開始
-    chat_area_y_spacing: int = 70  # 各コメント間の間隔
+    chat_area_y_start: int = 400  # 下部から開始（最も下）
+    chat_area_y_spacing: int = 45  # 各コメント間の間隔（狭く）
 
     # フォント設定
     font_name: str = "Arial"
-    font_size: int = 22
+    font_size: int = 28  # より大きく
 
     # 色設定（ASS形式: &HAABBGGRR）
     text_color: str = "&H00FFFFFF"  # 白
@@ -77,7 +77,8 @@ def create_slot_based_chat_event(
     start_time: float,
     end_time: float,
     config: OverlayConfig,
-    slot: int
+    slot: int,
+    transition_time: Optional[float] = None
 ) -> str:
     """
     スロットベースのチャットイベントを生成
@@ -87,7 +88,8 @@ def create_slot_based_chat_event(
         start_time: 開始時刻（秒）
         end_time: 終了時刻（秒）
         config: オーバーレイ設定
-        slot: 表示スロット（0=最下部、max_visible_messages-1=最上部）
+        slot: 表示スロット（0=最下部、上に向かって増える）
+        transition_time: スロット移動のアニメーション時間（秒）、Noneの場合は移動なし
 
     Returns:
         ASSイベント文字列
@@ -96,14 +98,14 @@ def create_slot_based_chat_event(
     end_str = ass_time_format(end_time)
 
     # Y座標を計算（slot 0が最下部）
-    y_position = config.chat_area_y_start - (slot * config.chat_area_y_spacing)
+    y_position = config.chat_area_y_start + (slot * config.chat_area_y_spacing)
     x_pos = config.chat_area_x
 
     # エスケープ処理
     message_escaped = message.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
 
-    # フェードイン・フェードアウト付き（短めの200ms）
-    event = f"Dialogue: 0,{start_str},{end_str},ChatMessage,,0,0,0,,{{\\pos({x_pos},{y_position})\\fad(200,200)}}{message_escaped}\n"
+    # 固定位置で表示
+    event = f"Dialogue: 0,{start_str},{end_str},ChatMessage,,0,0,0,,{{\\pos({x_pos},{y_position})}}{message_escaped}\n"
 
     return event
 
@@ -117,7 +119,7 @@ def generate_chat_overlay(
     チャットメッセージからASSオーバーレイファイルを生成
 
     常に最大7件（max_visible_messages）のコメントを表示。
-    新しいコメントが追加されると、古いコメントが消える仕組み。
+    新しいコメントが最下部（slot 0）に追加され、既存のコメントが一気に上（slot 1, 2, ...）にスライド。
 
     Args:
         chat_messages: チャットメッセージのリスト
@@ -131,77 +133,96 @@ def generate_chat_overlay(
         config = OverlayConfig()
 
     max_visible = config.max_visible_messages
+    slide_duration = 0.3  # スライドアニメーションの時間（秒）
 
     # ASSファイルを生成
     with open(output_path, "w", encoding="utf-8") as f:
         # ヘッダーを書き込み
         f.write(generate_ass_header(config))
 
-        # 各メッセージに対してスロットベースのイベントを生成
+        # 各メッセージに対してイベントを生成
         for i, msg in enumerate(chat_messages):
             message_text = msg.get("message", "")
             time_seconds = msg.get("time_in_seconds", 0.0)
 
-            # 次のメッセージが来るまで、または動画の最後まで表示
-            if i + 1 < len(chat_messages):
-                next_time = chat_messages[i + 1].get("time_in_seconds", time_seconds + 5.0)
-            else:
-                # 最後のメッセージは5秒表示
-                next_time = time_seconds + 5.0
-
-            # このメッセージが表示されるスロットを決定
-            # 新しいメッセージは常にslot 0（最下部）に追加
-            # 古いメッセージは上にシフトしていく
-            slot = 0
-
-            # このメッセージの表示開始時刻
-            start_time = time_seconds
-
-            # 終了時刻：次のメッセージが来るまで、または最大max_visible件目まで表示
-            # max_visible件後の新しいメッセージが来たら消える
+            # このメッセージが表示される全期間
+            # 最大max_visible件後の新しいメッセージが来たら消える
             end_index = i + max_visible
             if end_index < len(chat_messages):
-                end_time = chat_messages[end_index].get("time_in_seconds", next_time)
+                end_time = chat_messages[end_index].get("time_in_seconds", time_seconds + 5.0)
             else:
-                end_time = next_time
+                # 最後のメッセージは5秒表示
+                end_time = time_seconds + 5.0
 
-            # スロットを決定（このメッセージより後に来たメッセージの数）
-            # i番目のメッセージは、i+1, i+2, ... のメッセージが来ると上にシフト
-            for j in range(i + 1, min(i + max_visible, len(chat_messages))):
-                msg_j_time = chat_messages[j].get("time_in_seconds", 0.0)
+            # このメッセージのライフサイクル: 新しいコメントが来るたびにスロットを上げる（上に移動）
+            for j in range(i, min(i + max_visible, len(chat_messages))):
+                slot = j - i  # 0, 1, 2, ... (0=最下部)
 
-                # j番目のメッセージが表示されている間、i番目のメッセージのスロット
-                slot_j = j - i
+                # この区間の開始時刻と終了時刻
+                segment_start = chat_messages[j].get("time_in_seconds", 0.0)
 
-                # j番目のメッセージの表示開始時刻
-                start_j = msg_j_time
-
-                # j番目のメッセージの次のメッセージ、または終了時刻
-                if j + 1 < len(chat_messages):
-                    end_j = chat_messages[j + 1].get("time_in_seconds", msg_j_time + 5.0)
+                # slot 6（最上部）に到達したら、次のメッセージが来た瞬間に消える
+                if slot == max_visible - 1 and j + 1 < len(chat_messages):
+                    # 7件目は次のメッセージが来る瞬間に即座に消える
+                    segment_end = chat_messages[j + 1].get("time_in_seconds", 0.0)
+                elif j + 1 < len(chat_messages):
+                    # 通常の場合
+                    next_msg_time = chat_messages[j + 1].get("time_in_seconds", 0.0)
+                    segment_end = min(next_msg_time, end_time)
                 else:
-                    end_j = msg_j_time + 5.0
+                    segment_end = end_time
 
-                # この区間でi番目のメッセージをslot_jに表示
-                event = create_slot_based_chat_event(
-                    message_text,
-                    max(start_time, start_j),
-                    min(end_time, end_j),
-                    config,
-                    slot_j
-                )
-                f.write(event)
+                if segment_end <= segment_start:
+                    continue
 
-            # i番目のメッセージが最初に表示される区間（slot 0）
-            first_end = chat_messages[i + 1].get("time_in_seconds", next_time) if i + 1 < len(chat_messages) else next_time
-            event = create_slot_based_chat_event(
-                message_text,
-                start_time,
-                min(end_time, first_end),
-                config,
-                0
-            )
-            f.write(event)
+                # Y座標を計算（slot 0が最下部、上に向かって減少）
+                y_position = config.chat_area_y_start - (slot * config.chat_area_y_spacing)
+                x_pos = config.chat_area_x
+
+                # エスケープ処理
+                message_escaped = message_text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+
+                start_str = ass_time_format(segment_start)
+                end_str = ass_time_format(segment_end)
+
+                # 次のメッセージが来る瞬間にスライドアニメーション（上に移動）
+                if j + 1 < len(chat_messages):
+                    # 次のスロット位置（上に移動）
+                    # slot 6の場合は画面外に移動（さらに上）
+                    next_slot = slot + 1
+                    y_next = config.chat_area_y_start - (next_slot * config.chat_area_y_spacing)
+
+                    # 通常のスライドアニメーション
+                    # スライドアニメーションの開始時刻（次のメッセージの少し前）
+                    slide_start = max(segment_start, segment_end - slide_duration)
+
+                    if slide_start > segment_start:
+                        # 静止区間
+                        event = f"Dialogue: 0,{start_str},{ass_time_format(slide_start)},ChatMessage,,0,0,0,,{{\\pos({x_pos},{y_position})}}{message_escaped}\n"
+                        f.write(event)
+
+                        # スライド区間（上に移動）
+                        # slot 6の場合はフェードアウト効果を追加
+                        if slot == max_visible - 1:
+                            # フェードアウト時間をミリ秒で計算
+                            fade_duration_ms = int(slide_duration * 1000)
+                            event = f"Dialogue: 0,{ass_time_format(slide_start)},{end_str},ChatMessage,,0,0,0,,{{\\move({x_pos},{y_position},{x_pos},{y_next})\\fad(0,{fade_duration_ms})}}{message_escaped}\n"
+                        else:
+                            event = f"Dialogue: 0,{ass_time_format(slide_start)},{end_str},ChatMessage,,0,0,0,,{{\\move({x_pos},{y_position},{x_pos},{y_next})}}{message_escaped}\n"
+                        f.write(event)
+                    else:
+                        # 全体がスライド
+                        # slot 6の場合はフェードアウト効果を追加
+                        if slot == max_visible - 1:
+                            fade_duration_ms = int((segment_end - segment_start) * 1000)
+                            event = f"Dialogue: 0,{start_str},{end_str},ChatMessage,,0,0,0,,{{\\move({x_pos},{y_position},{x_pos},{y_next})\\fad(0,{fade_duration_ms})}}{message_escaped}\n"
+                        else:
+                            event = f"Dialogue: 0,{start_str},{end_str},ChatMessage,,0,0,0,,{{\\move({x_pos},{y_position},{x_pos},{y_next})}}{message_escaped}\n"
+                        f.write(event)
+                else:
+                    # 最後の区間（次のメッセージがない場合）は静止のみ
+                    event = f"Dialogue: 0,{start_str},{end_str},ChatMessage,,0,0,0,,{{\\pos({x_pos},{y_position})}}{message_escaped}\n"
+                    f.write(event)
 
     event_count = len(chat_messages)
     print(f"✓ Generated ASS overlay with {event_count} chat messages")
