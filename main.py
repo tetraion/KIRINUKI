@@ -29,6 +29,232 @@ from kirinuki_processor.steps.step5_generate_overlay import (
 from kirinuki_processor.steps.step6_compose_video import compose_video
 
 
+def run_prepare_pipeline(config_path: str) -> bool:
+    """
+    素材準備パイプライン（字幕生成まで、動画合成は行わない）
+
+    Args:
+        config_path: 設定ファイルのパス
+
+    Returns:
+        成功したかどうか
+    """
+    print("=" * 60)
+    print("KIRINUKI Processor - Prepare Materials")
+    print("=" * 60)
+
+    # ステップ0: 設定読み込み
+    print("\n[Step 0] Loading configuration...")
+    try:
+        config = load_config_from_file(config_path)
+        print(f"✓ Configuration loaded")
+        print(f"  Video URL: {config.video_url}")
+        print(f"  Start time: {config.start_time}")
+        print(f"  End time: {config.end_time or 'Not specified'}")
+        print(f"  Auto download: {config.auto_download}")
+        if config.webm_path:
+            print(f"  WebM path: {config.webm_path}")
+    except Exception as e:
+        print(f"✗ Failed to load configuration: {e}")
+        return False
+
+    # 出力・一時ディレクトリを作成
+    os.makedirs(config.output_dir, exist_ok=True)
+    os.makedirs(config.temp_dir, exist_ok=True)
+
+    # ファイルパスを定義
+    clip_video_path = os.path.join(config.temp_dir, "clip.webm")
+    subs_clip_path = os.path.join(config.temp_dir, "subs_clip.srt")
+    chat_full_path = os.path.join(config.temp_dir, "chat_full.json")
+    chat_clip_path = os.path.join(config.temp_dir, "chat_clip.json")
+    chat_overlay_path = os.path.join(config.temp_dir, "chat_overlay.ass")
+
+    # 動画ファイルのパスを決定
+    if config.auto_download:
+        print("\n[Step 0] Downloading and clipping video from YouTube...")
+        try:
+            success = download_and_clip_video(
+                config.video_url,
+                config.start_time,
+                config.end_time,
+                clip_video_path,
+                download_full=False
+            )
+            if not success:
+                print("✗ Failed to download and clip video")
+                return False
+            video_source_path = clip_video_path
+        except Exception as e:
+            print(f"✗ Error in Step 0: {e}")
+            return False
+    else:
+        print("\n[Step 0] Using existing video file")
+        if not config.webm_path:
+            print("✗ WEBM_PATH is required when AUTO_DOWNLOAD=false")
+            return False
+        video_source_path = config.webm_path
+
+    # ステップ1: Whisper字幕生成
+    print("\n[Step 1] Generating subtitles with Whisper...")
+    try:
+        success = generate_subtitles_with_whisper(
+            video_source_path,
+            subs_clip_path,
+            model_size="large",
+            language="ja"
+        )
+        if not success:
+            print("  Note: Failed to generate subtitles")
+    except Exception as e:
+        print(f"✗ Error in Step 1: {e}")
+
+    # ステップ2: チャット取得
+    print("\n[Step 2] Fetching live chat from YouTube...")
+    try:
+        success = fetch_chat(config.video_url, chat_full_path)
+        if not success:
+            print("  Note: Chat replay not available")
+            chat_full_path = None
+    except Exception as e:
+        print(f"✗ Error in Step 2: {e}")
+        chat_full_path = None
+
+    # ステップ3: チャット抽出
+    if chat_full_path and os.path.exists(chat_full_path):
+        print("\n[Step 3] Extracting chat messages for clip...")
+        try:
+            count = load_and_extract_chat(
+                chat_full_path,
+                chat_clip_path,
+                config.start_time,
+                config.end_time
+            )
+            if count == 0:
+                chat_clip_path = None
+        except Exception as e:
+            print(f"✗ Error in Step 3: {e}")
+            chat_clip_path = None
+    else:
+        print("\n[Step 3] Skipped (no chat available)")
+        chat_clip_path = None
+
+    # ステップ4: オーバーレイ生成
+    if chat_clip_path and os.path.exists(chat_clip_path):
+        print("\n[Step 4] Generating chat overlay (ASS)...")
+        try:
+            overlay_config = OverlayConfig()
+            count = generate_overlay_from_file(
+                chat_clip_path,
+                chat_overlay_path,
+                overlay_config
+            )
+            if count == 0:
+                chat_overlay_path = None
+        except Exception as e:
+            print(f"✗ Error in Step 4: {e}")
+            chat_overlay_path = None
+    else:
+        print("\n[Step 4] Skipped (no chat available)")
+        chat_overlay_path = None
+
+    print("\n" + "=" * 60)
+    print("✓ Preparation completed successfully!")
+    print("\nGenerated files:")
+    print(f"  Video: {video_source_path}")
+    if os.path.exists(subs_clip_path):
+        print(f"  Subtitles: {subs_clip_path}")
+    if chat_overlay_path and os.path.exists(chat_overlay_path):
+        print(f"  Chat overlay: {chat_overlay_path}")
+    print("\n📝 Next steps:")
+    print(f"  1. Edit subtitles: {subs_clip_path}")
+    print(f"  2. Run: python main.py compose {config_path}")
+    print("=" * 60)
+
+    return True
+
+
+def run_compose_pipeline(config_path: str) -> bool:
+    """
+    動画合成パイプライン（既存の素材を使って動画を合成）
+
+    Args:
+        config_path: 設定ファイルのパス
+
+    Returns:
+        成功したかどうか
+    """
+    print("=" * 60)
+    print("KIRINUKI Processor - Compose Video")
+    print("=" * 60)
+
+    # 設定読み込み
+    print("\n[Loading configuration...]")
+    try:
+        config = load_config_from_file(config_path)
+        print(f"✓ Configuration loaded")
+    except Exception as e:
+        print(f"✗ Failed to load configuration: {e}")
+        return False
+
+    # ファイルパスを定義
+    clip_video_path = os.path.join(config.temp_dir, "clip.webm")
+    subs_clip_path = os.path.join(config.temp_dir, "subs_clip.srt")
+    chat_overlay_path = os.path.join(config.temp_dir, "chat_overlay.ass")
+    final_output_path = os.path.join(config.output_dir, "final.mp4")
+
+    # 動画ファイルのパスを決定
+    if config.auto_download:
+        video_source_path = clip_video_path
+    else:
+        video_source_path = config.webm_path
+
+    # ファイルの存在確認
+    if not os.path.exists(video_source_path):
+        print(f"✗ Video file not found: {video_source_path}")
+        print("  Please run 'python main.py prepare' first")
+        return False
+
+    print(f"\nUsing files:")
+    print(f"  Video: {video_source_path}")
+
+    subtitle_path = None
+    if os.path.exists(subs_clip_path):
+        subtitle_path = subs_clip_path
+        print(f"  Subtitles: {subs_clip_path}")
+    else:
+        print(f"  Subtitles: (none)")
+
+    overlay_path = None
+    if os.path.exists(chat_overlay_path):
+        overlay_path = chat_overlay_path
+        print(f"  Chat overlay: {chat_overlay_path}")
+    else:
+        print(f"  Chat overlay: (none)")
+
+    # ステップ5: 動画合成
+    print("\n[Step 5] Composing final video...")
+    try:
+        success = compose_video(
+            video_source_path,
+            final_output_path,
+            subtitle_path=subtitle_path,
+            overlay_path=overlay_path
+        )
+        if not success:
+            print("✗ Failed to compose video")
+            return False
+    except Exception as e:
+        print(f"✗ Error in Step 5: {e}")
+        return False
+
+    print("\n" + "=" * 60)
+    print("✓ Composition completed successfully!")
+    print(f"  Final output: {final_output_path}")
+    print("=" * 60)
+
+    return True
+
+
 def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
     """
     全ステップを実行するパイプライン
@@ -286,8 +512,16 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
+    # 素材準備パイプライン
+    prepare_parser = subparsers.add_parser("prepare", help="Prepare materials (download, subtitles, chat) - stops before composing video")
+    prepare_parser.add_argument("config", help="Configuration file path")
+
+    # 動画合成パイプライン
+    compose_parser = subparsers.add_parser("compose", help="Compose final video using prepared materials")
+    compose_parser.add_argument("config", help="Configuration file path")
+
     # フルパイプライン実行
-    pipeline_parser = subparsers.add_parser("run", help="Run full pipeline")
+    pipeline_parser = subparsers.add_parser("run", help="Run full pipeline (all steps including video composition)")
     pipeline_parser.add_argument("config", help="Configuration file path")
     pipeline_parser.add_argument(
         "--skip",
@@ -353,7 +587,15 @@ def main():
 
     # コマンド実行
     try:
-        if args.command == "run":
+        if args.command == "prepare":
+            success = run_prepare_pipeline(args.config)
+            return 0 if success else 1
+
+        elif args.command == "compose":
+            success = run_compose_pipeline(args.config)
+            return 0 if success else 1
+
+        elif args.command == "run":
             success = run_full_pipeline(args.config, args.skip or [])
             return 0 if success else 1
 
