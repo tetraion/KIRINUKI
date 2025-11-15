@@ -155,8 +155,22 @@ def _download_with_sections(
         "--download-sections", section,
         "-o", base_path,
         "--force-keyframes-at-cuts",  # キーフレームで正確に切り抜き
+        "--force-overwrites",
         video_url
     ]
+
+    # 既存ファイルを削除して確実に上書き
+    possible_files = [
+        output_path,
+        f"{base_path}.webm",
+        f"{base_path}.mp4",
+    ]
+    for file_path in possible_files:
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
 
     try:
         print("  Downloading specified section...")
@@ -169,12 +183,6 @@ def _download_with_sections(
 
         # 生成されたファイルを確認
         # yt-dlpは拡張子を自動で付ける
-        possible_files = [
-            output_path,
-            f"{base_path}.webm",
-            f"{base_path}.mp4",
-        ]
-
         found_file = None
         for file_path in possible_files:
             if os.path.exists(file_path):

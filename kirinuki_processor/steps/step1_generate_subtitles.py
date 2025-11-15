@@ -83,6 +83,66 @@ def format_timestamp_ass(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
 
 
+def parse_srt_timestamp(timestamp: str) -> float:
+    """
+    SRTのタイムスタンプを秒数に変換
+    """
+    timestamp = timestamp.strip()
+    hh, mm, rest = timestamp.split(":")
+    ss, ms = rest.split(",")
+    return int(hh) * 3600 + int(mm) * 60 + int(ss) + int(ms) / 1000.0
+
+
+def convert_srt_to_ass(input_srt: str, output_ass: str) -> None:
+    """
+    編集済みSRTをASSスタイルに変換
+    """
+    if not os.path.exists(input_srt):
+        raise FileNotFoundError(f"SRT file not found: {input_srt}")
+
+    segments = []
+    with open(input_srt, "r", encoding="utf-8") as f:
+        block = []
+        for line in f:
+            stripped = line.rstrip("\n")
+            if stripped == "":
+                if block:
+                    segments.append(_parse_srt_block(block))
+                    block = []
+            else:
+                block.append(stripped)
+        if block:
+            segments.append(_parse_srt_block(block))
+
+    segments = [seg for seg in segments if seg]
+    if not segments:
+        raise ValueError("No subtitle entries found in SRT")
+
+    generate_ass_from_segments(segments, output_ass)
+
+
+def _parse_srt_block(lines: list) -> Optional[dict]:
+    if len(lines) < 2:
+        return None
+    timing_line = None
+    text_lines = []
+    for idx, line in enumerate(lines):
+        if "-->" in line:
+            timing_line = line
+            text_lines = lines[idx + 1:]
+            break
+    if not timing_line:
+        return None
+
+    start_str, end_str = [part.strip() for part in timing_line.split("-->")]
+    start = parse_srt_timestamp(start_str)
+    end = parse_srt_timestamp(end_str)
+    text = "\n".join(text_lines).strip()
+    if not text:
+        return None
+    return {"start": start, "end": end, "text": text}
+
+
 def generate_srt_from_segments(segments: list, output_path: str) -> None:
     """
     WhisperのセグメントデータからSRTファイルを生成
@@ -134,7 +194,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         for segment in segments:
             start_time = format_timestamp_ass(segment["start"])
             end_time = format_timestamp_ass(segment["end"])
-            text = segment["text"].strip()
+            text = segment["text"].strip().replace("\n", "\\N")
 
             # エスケープ処理（先に実行）
             text_escaped = text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")

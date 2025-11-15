@@ -15,7 +15,7 @@ def generate_title_bar(
     video_height: int = 1080,
     slide_duration: float = 1.2,
     display_duration: float = None,  # Noneの場合は動画終了まで表示
-    channel_name: str = "ひろゆきのつぶやき",  # チャンネル名
+    channel_name: str = "ひろゆき視点",  # チャンネル名
     logo_height: int = 180  # ロゴの高さ（step6_compose_video.pyと同期）
 ) -> bool:
     """

@@ -19,7 +19,10 @@ from kirinuki_processor.steps.step0_config import (
     ClipConfig
 )
 from kirinuki_processor.steps.step0_download_clip import download_and_clip_video
-from kirinuki_processor.steps.step1_generate_subtitles import generate_subtitles_with_whisper
+from kirinuki_processor.steps.step1_generate_subtitles import (
+    generate_subtitles_with_whisper,
+    convert_srt_to_ass
+)
 from kirinuki_processor.steps.step3_fetch_chat import fetch_chat
 from kirinuki_processor.steps.step4_extract_chat import load_and_extract_chat
 from kirinuki_processor.steps.step5_generate_overlay import (
@@ -221,7 +224,16 @@ def run_compose_pipeline(config_path: str) -> bool:
     print(f"  Video: {video_source_path}")
 
     subtitle_path = None
-    # ASSファイルを優先、なければSRTを使用
+    if os.path.exists(subs_clip_path_srt):
+        try:
+            needs_regen = (not os.path.exists(subs_clip_path_ass) or
+                           os.path.getmtime(subs_clip_path_ass) < os.path.getmtime(subs_clip_path_srt))
+            if needs_regen:
+                print("  Updating styled subtitles from edited SRT...")
+                convert_srt_to_ass(subs_clip_path_srt, subs_clip_path_ass)
+        except Exception as e:
+            print(f"  Warning: Failed to regenerate ASS from SRT: {e}")
+
     if os.path.exists(subs_clip_path_ass):
         subtitle_path = subs_clip_path_ass
         print(f"  Subtitles: {subs_clip_path_ass} (styled)")
@@ -229,7 +241,7 @@ def run_compose_pipeline(config_path: str) -> bool:
         subtitle_path = subs_clip_path_srt
         print(f"  Subtitles: {subs_clip_path_srt}")
     else:
-        print(f"  Subtitles: (none)")
+        print("  Subtitles: (none)")
 
     overlay_path = None
     if os.path.exists(chat_overlay_path):
@@ -444,6 +456,23 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
         print("\n[Step 4] Skipped (no chat available)")
         chat_overlay_path = None
 
+    subtitle_for_compose = None
+    if subs_clip_path and os.path.exists(subs_clip_path):
+        subs_clip_path_ass = subs_clip_path.replace(".srt", ".ass")
+        try:
+            needs_regen = (not os.path.exists(subs_clip_path_ass) or
+                           os.path.getmtime(subs_clip_path_ass) < os.path.getmtime(subs_clip_path))
+            if needs_regen:
+                print("  Updating styled subtitles from edited SRT...")
+                convert_srt_to_ass(subs_clip_path, subs_clip_path_ass)
+        except Exception as e:
+            print(f"  Warning: Failed to regenerate ASS from SRT: {e}")
+
+        if os.path.exists(subs_clip_path_ass):
+            subtitle_for_compose = subs_clip_path_ass
+        else:
+            subtitle_for_compose = subs_clip_path
+
     # ステップ5: 動画合成
     if 5 not in skip_steps:
         print("\n[Step 5] Composing final video...")
@@ -451,7 +480,7 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
             success = compose_video(
                 video_source_path,
                 final_output_path,
-                subtitle_path=subs_clip_path if subs_clip_path and os.path.exists(subs_clip_path) else None,
+                subtitle_path=subtitle_for_compose,
                 overlay_path=chat_overlay_path if chat_overlay_path and os.path.exists(chat_overlay_path) else None
             )
             if not success:
