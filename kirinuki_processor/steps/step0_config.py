@@ -20,6 +20,7 @@ class ClipConfig:
     video_url: str
     start_time: str  # hh:mm:ss 形式
     end_time: Optional[str]  # hh:mm:ss 形式（任意）
+    title: Optional[str] = None  # 動画タイトル（任意）
     webm_path: Optional[str] = None  # 既存のwebmファイル（任意、指定しない場合は自動ダウンロード）
     output_dir: str = "data/output"
     temp_dir: str = "data/temp"
@@ -118,6 +119,7 @@ def load_config_from_file(config_path: str) -> ClipConfig:
         video_url=config_dict["VIDEO_URL"],
         start_time=config_dict["START_TIME"],
         end_time=config_dict.get("END_TIME"),
+        title=config_dict.get("TITLE"),  # 任意
         webm_path=config_dict.get("WEBM_PATH"),  # 任意
         output_dir=config_dict.get("OUTPUT_DIR", "data/output"),
         temp_dir=config_dict.get("TEMP_DIR", "data/temp"),
@@ -148,6 +150,9 @@ START_TIME=00:05:30
 
 # 切り抜き終了時刻（任意、hh:mm:ss または mm:ss 形式）
 END_TIME=00:10:45
+
+# 動画タイトル（任意、指定すると画面上部にタイトルバーが表示されます）
+# TITLE=高市氏になっても政治は変わらない
 
 # 動画を自動ダウンロード・切り抜きするか（任意、デフォルト: true）
 # true の場合、YouTubeから直接ダウンロードして切り抜きます

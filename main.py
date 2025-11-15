@@ -27,6 +27,7 @@ from kirinuki_processor.steps.step5_generate_overlay import (
     OverlayConfig
 )
 from kirinuki_processor.steps.step6_compose_video import compose_video
+from kirinuki_processor.steps.step_title_bar import generate_title_bar
 
 
 def run_prepare_pipeline(config_path: str) -> bool:
@@ -201,6 +202,7 @@ def run_compose_pipeline(config_path: str) -> bool:
     subs_clip_path_srt = os.path.join(config.temp_dir, "subs_clip.srt")
     subs_clip_path_ass = os.path.join(config.temp_dir, "subs_clip.ass")
     chat_overlay_path = os.path.join(config.temp_dir, "chat_overlay.ass")
+    title_bar_path = os.path.join(config.temp_dir, "title_bar.ass")
     final_output_path = os.path.join(config.output_dir, "final.mp4")
 
     # 動画ファイルのパスを決定
@@ -236,14 +238,48 @@ def run_compose_pipeline(config_path: str) -> bool:
     else:
         print(f"  Chat overlay: (none)")
 
+    # タイトルバー生成（TITLEが指定されている場合）
+    title_overlay_path = None
+    if config.title:
+        print(f"\n[Generating title bar...]")
+        try:
+            success = generate_title_bar(
+                config.title,
+                title_bar_path,
+                video_width=1920,
+                video_height=1080,
+                slide_duration=1.2,
+                display_duration=None  # 動画終了まで表示
+            )
+            if success:
+                title_overlay_path = title_bar_path
+                print(f"  Title bar: {title_bar_path}")
+        except Exception as e:
+            print(f"✗ Error generating title bar: {e}")
+
+    # ロゴファイルのパス（固定）
+    logo_path = "data/input/ひろゆき視点【切り抜き】.png"
+    if not os.path.exists(logo_path):
+        logo_path = None
+        print(f"  Logo file not found: {logo_path}")
+
     # ステップ5: 動画合成
     print("\n[Step 5] Composing final video...")
     try:
+        # オーバーレイを結合（chat + title）
+        overlays = []
+        if overlay_path:
+            overlays.append(overlay_path)
+        if title_overlay_path:
+            overlays.append(title_overlay_path)
+
         success = compose_video(
             video_source_path,
             final_output_path,
             subtitle_path=subtitle_path,
-            overlay_path=overlay_path
+            overlay_path=overlay_path,
+            title_overlay_path=title_overlay_path,
+            logo_path=logo_path
         )
         if not success:
             print("✗ Failed to compose video")

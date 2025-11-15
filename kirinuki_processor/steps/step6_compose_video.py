@@ -15,6 +15,8 @@ def compose_video(
     output_path: str,
     subtitle_path: Optional[str] = None,
     overlay_path: Optional[str] = None,
+    title_overlay_path: Optional[str] = None,
+    logo_path: Optional[str] = None,
     video_codec: str = "libx264",
     audio_codec: str = "aac",
     preset: str = "medium",
@@ -50,33 +52,89 @@ def compose_video(
     cmd = [
         "ffmpeg",
         "-i", video_path,
-        "-y",  # 上書き確認なし
     ]
 
+    # ロゴ画像を入力として追加
+    has_logo = logo_path and os.path.exists(logo_path)
+    if has_logo:
+        cmd.extend(["-i", logo_path])
+
+    cmd.append("-y")  # 上書き確認なし
+
     # フィルターグラフを構築
-    filters = []
+    logo_y = 10  # タイトルバー内の上部から10px
+    logo_x = 15  # 左端から15px
+    logo_height = 180  # ロゴの高さ（より大きく）
+    animation_duration = 1.2  # アニメーション時間（タイトルバーと同じ）
 
-    # 字幕フィルター（SRT または ASS）
-    if subtitle_path and os.path.exists(subtitle_path):
-        # パスをエスケープ（Windowsパス対応）
-        subtitle_path_escaped = subtitle_path.replace("\\", "/").replace(":", "\\:")
+    # ロゴがある場合はfilter_complexを使用
+    if has_logo:
+        filter_parts = []
 
-        # ASS形式の場合はassフィルター、SRT形式の場合はsubtitlesフィルターを使用
-        if subtitle_path.endswith(".ass"):
-            filters.append(f"ass={subtitle_path_escaped}")
+        # 字幕、チャット、タイトルバーを全て先に適用
+        ass_filters = []
+        if subtitle_path and os.path.exists(subtitle_path):
+            subtitle_path_escaped = subtitle_path.replace("\\", "/").replace(":", "\\:")
+            if subtitle_path.endswith(".ass"):
+                ass_filters.append(f"ass={subtitle_path_escaped}")
+            else:
+                ass_filters.append(f"subtitles={subtitle_path_escaped}")
+
+        if overlay_path and os.path.exists(overlay_path):
+            overlay_path_escaped = overlay_path.replace("\\", "/").replace(":", "\\:")
+            ass_filters.append(f"ass={overlay_path_escaped}")
+
+        if title_overlay_path and os.path.exists(title_overlay_path):
+            title_overlay_path_escaped = title_overlay_path.replace("\\", "/").replace(":", "\\:")
+            ass_filters.append(f"ass={title_overlay_path_escaped}")
+
+        # まず動画に全てのASSを適用
+        if ass_filters:
+            filter_parts.append(f"[0:v]{','.join(ass_filters)}[v_base]")
+            base_stream = "v_base"
         else:
-            filters.append(f"subtitles={subtitle_path_escaped}")
+            base_stream = "0:v"
 
-    # チャットオーバーレイフィルター（ASS）
-    if overlay_path and os.path.exists(overlay_path):
-        # ASS字幕を焼き込み
-        overlay_path_escaped = overlay_path.replace("\\", "/").replace(":", "\\:")
-        filters.append(f"ass={overlay_path_escaped}")
+        # ロゴを円形にして処理（太い白縁付き）
+        border_width = 12  # 白縁の太さ（ピクセル、サイズに合わせて調整）
+        filter_parts.append(
+            f"[1:v]scale={logo_height}:{logo_height},"
+            f"format=rgba,"
+            f"geq="
+            f"r='if(lte(hypot(X-W/2,Y-H/2),W/2-{border_width}),r(X,Y),255)':"
+            f"g='if(lte(hypot(X-W/2,Y-H/2),W/2-{border_width}),g(X,Y),255)':"
+            f"b='if(lte(hypot(X-W/2,Y-H/2),W/2-{border_width}),b(X,Y),255)':"
+            f"a='if(lte(hypot(X-W/2,Y-H/2),W/2),255,0)'"
+            f"[logo]"
+        )
 
-    # フィルターを適用
-    if filters:
-        filter_complex = ",".join(filters)
-        cmd.extend(["-vf", filter_complex])
+        # ロゴを左上にオーバーレイ
+        filter_parts.append(f"[{base_stream}][logo]overlay={logo_x}:{logo_y}")
+
+        filter_complex = ";".join(filter_parts)
+        cmd.extend(["-filter_complex", filter_complex])
+    else:
+        # ロゴがない場合は通常のvfフィルター
+        filters = []
+
+        if subtitle_path and os.path.exists(subtitle_path):
+            subtitle_path_escaped = subtitle_path.replace("\\", "/").replace(":", "\\:")
+            if subtitle_path.endswith(".ass"):
+                filters.append(f"ass={subtitle_path_escaped}")
+            else:
+                filters.append(f"subtitles={subtitle_path_escaped}")
+
+        if overlay_path and os.path.exists(overlay_path):
+            overlay_path_escaped = overlay_path.replace("\\", "/").replace(":", "\\:")
+            filters.append(f"ass={overlay_path_escaped}")
+
+        if title_overlay_path and os.path.exists(title_overlay_path):
+            title_overlay_path_escaped = title_overlay_path.replace("\\", "/").replace(":", "\\:")
+            filters.append(f"ass={title_overlay_path_escaped}")
+
+        if filters:
+            filter_complex = ",".join(filters)
+            cmd.extend(["-vf", filter_complex])
 
     # エンコード設定
     cmd.extend([
@@ -96,10 +154,14 @@ def compose_video(
     try:
         print(f"Starting video composition...")
         print(f"  Input: {video_path}")
+        if logo_path:
+            print(f"  Logo: {logo_path}")
         if subtitle_path:
             print(f"  Subtitle: {subtitle_path}")
         if overlay_path:
-            print(f"  Overlay: {overlay_path}")
+            print(f"  Chat overlay: {overlay_path}")
+        if title_overlay_path:
+            print(f"  Title overlay: {title_overlay_path}")
         print(f"  Output: {output_path}")
         print(f"  Command: {' '.join(cmd)}")
 
