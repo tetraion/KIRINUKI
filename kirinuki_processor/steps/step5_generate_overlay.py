@@ -20,10 +20,13 @@ class OverlayConfig:
     video_height: int = 1080
 
     # ニコ動風の横スクロールコメント設定
-    lane_count: int = 8
-    lane_top: int = 230  # タイトルバーを避ける開始位置
-    lane_spacing: int = 85  # 各レーンの縦間隔
+    lane_count: int = 6
+    lane_top: int = 260  # タイトルバーと被らない開始位置
+    lane_spacing: int = 70  # 各レーンの縦間隔（下部字幕を避ける）
     lane_gap: float = 0.25  # 同じレーンに再利用する際の余白秒数
+
+    # タイムオフセット
+    visible_start_offset: float = 5.0  # 切り抜き冒頭のコメントを除外
 
     # 移動パラメータ
     comment_speed: float = 380.0  # ピクセル/秒
@@ -121,6 +124,8 @@ def generate_chat_overlay(
                 continue
 
             base_time = float(msg.get("time_in_seconds", 0.0))
+            if base_time < config.visible_start_offset:
+                continue
             text_escaped = message_text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
 
             text_width = estimate_text_width(
