@@ -25,6 +25,10 @@ class ClipConfig:
     output_dir: str = "data/output"
     temp_dir: str = "data/temp"
     auto_download: bool = True  # 動画を自動ダウンロードするか
+    crop_top_percent: float = 0.0
+    crop_bottom_percent: float = 0.0
+    crop_left_percent: float = 0.0
+    crop_right_percent: float = 0.0
 
     def validate(self) -> None:
         """設定の妥当性をチェック"""
@@ -114,6 +118,19 @@ def load_config_from_file(config_path: str) -> ClipConfig:
     if "AUTO_DOWNLOAD" in config_dict:
         auto_download = config_dict["AUTO_DOWNLOAD"].lower() in ["true", "yes", "1"]
 
+    # クロップ値を取得（単一指定CROP_PERCENTがあれば優先）
+    crop_top = float(config_dict.get("CROP_TOP_PERCENT", 0.0))
+    crop_bottom = float(config_dict.get("CROP_BOTTOM_PERCENT", 0.0))
+    crop_left = float(config_dict.get("CROP_LEFT_PERCENT", 0.0))
+    crop_right = float(config_dict.get("CROP_RIGHT_PERCENT", 0.0))
+
+    if "CROP_PERCENT" in config_dict:
+        try:
+            uniform_crop = float(config_dict["CROP_PERCENT"])
+            crop_top = crop_bottom = crop_left = crop_right = uniform_crop
+        except ValueError:
+            raise ValueError("CROP_PERCENT must be a number")
+
     # ClipConfigオブジェクトを作成
     config = ClipConfig(
         video_url=config_dict["VIDEO_URL"],
@@ -124,6 +141,10 @@ def load_config_from_file(config_path: str) -> ClipConfig:
         output_dir=config_dict.get("OUTPUT_DIR", "data/output"),
         temp_dir=config_dict.get("TEMP_DIR", "data/temp"),
         auto_download=auto_download,
+        crop_top_percent=crop_top,
+        crop_bottom_percent=crop_bottom,
+        crop_left_percent=crop_left,
+        crop_right_percent=crop_right,
     )
 
     # バリデーション
@@ -168,6 +189,14 @@ OUTPUT_DIR=data/output
 
 # 一時ファイル用ディレクトリ（任意、デフォルト: data/temp）
 TEMP_DIR=data/temp
+
+# 画面の周囲を上下左右それぞれパーセンテージでクロップ（任意）
+# 16:9 を保ったまま全方向を均等に削りたい場合は CROP_PERCENT=10 のように単一値を指定
+# CROP_PERCENT=0
+# CROP_TOP_PERCENT=0
+# CROP_BOTTOM_PERCENT=0
+# CROP_LEFT_PERCENT=0
+# CROP_RIGHT_PERCENT=0
 """
 
     with open(output_path, "w", encoding="utf-8") as f:

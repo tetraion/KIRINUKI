@@ -80,6 +80,11 @@ VIDEO_URL=https://www.youtube.com/watch?v=xxxxxxxxxxxxx
 START_TIME=00:05:30
 END_TIME=00:10:45
 AUTO_DOWNLOAD=true
+# CROP_PERCENT=0         # 全方向を均等にクロップしたい場合に使用
+# CROP_TOP_PERCENT=0
+# CROP_BOTTOM_PERCENT=0
+# CROP_LEFT_PERCENT=0
+# CROP_RIGHT_PERCENT=0
 ```
 
 3. **素材を準備（字幕生成まで）**
@@ -111,7 +116,7 @@ python main.py compose config.txt
 
 完成した動画は `data/output/final.mp4` に出力されます。
 
-**字幕を再編集したい場合**は、`subs_clip.srt` を編集して `compose` コマンドを再実行するだけです。
+**字幕を再編集したい場合**は、`subs_clip.srt` を編集して `compose` コマンドを再実行するだけです（実行時にスタイル付き `subs_clip.ass` が自動再生成されます）。
 
 ### フルパイプライン（字幕編集なし）
 
@@ -156,6 +161,7 @@ python main.py step1 -i data/temp/clip.webm -o data/temp/subs_clip.srt -m medium
 
 # 動画合成のみ実行
 python main.py step5 -v data/temp/clip.webm -s data/temp/subs_clip.srt -c data/temp/chat_overlay.ass -o data/output/final.mp4
+# SRTを指定すると自動的にASSへ変換され、既存の字幕スタイルが適用されます
 ```
 
 ## プロジェクト構造
@@ -191,7 +197,11 @@ KIRINUKI/
 
 ### チャット表示設定
 
-[kirinuki_processor/steps/step5_generate_overlay.py](kirinuki_processor/steps/step5_generate_overlay.py:17-44)の`OverlayConfig`クラスで、チャット表示位置、フォントサイズ、色などをカスタマイズできます。
+[kirinuki_processor/steps/step5_generate_overlay.py](kirinuki_processor/steps/step5_generate_overlay.py)の`OverlayConfig`クラスで、ニコニコ動画風に右→左へ流れるコメントのレーン数・高さ・速度・フォントなどをカスタマイズできます。
+
+### トリミング設定
+
+`config.txt` の `CROP_PERCENT` を設定すれば、上下左右すべてを同じ割合でクロップできます。細かく調整したい場合は `CROP_TOP_PERCENT` など個別キーを使うことも可能です。`compose` 実行時には、指定された値を満たしたうえで上下左右を均等に切り詰め、最終映像のアスペクト比（16:9）を保つように自動調整されます。
 
 ### 動画エンコード設定
 

@@ -291,7 +291,11 @@ def run_compose_pipeline(config_path: str) -> bool:
             subtitle_path=subtitle_path,
             overlay_path=overlay_path,
             title_overlay_path=title_overlay_path,
-            logo_path=logo_path
+            logo_path=logo_path,
+            crop_top_percent=config.crop_top_percent,
+            crop_bottom_percent=config.crop_bottom_percent,
+            crop_left_percent=config.crop_left_percent,
+            crop_right_percent=config.crop_right_percent
         )
         if not success:
             print("✗ Failed to compose video")
