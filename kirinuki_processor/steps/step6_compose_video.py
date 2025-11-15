@@ -56,14 +56,18 @@ def compose_video(
     # フィルターグラフを構築
     filters = []
 
-    # 字幕フィルター（SRT）
+    # 字幕フィルター（SRT または ASS）
     if subtitle_path and os.path.exists(subtitle_path):
-        # SRT字幕を焼き込み
         # パスをエスケープ（Windowsパス対応）
         subtitle_path_escaped = subtitle_path.replace("\\", "/").replace(":", "\\:")
-        filters.append(f"subtitles={subtitle_path_escaped}")
 
-    # オーバーレイフィルター（ASS）
+        # ASS形式の場合はassフィルター、SRT形式の場合はsubtitlesフィルターを使用
+        if subtitle_path.endswith(".ass"):
+            filters.append(f"ass={subtitle_path_escaped}")
+        else:
+            filters.append(f"subtitles={subtitle_path_escaped}")
+
+    # チャットオーバーレイフィルター（ASS）
     if overlay_path and os.path.exists(overlay_path):
         # ASS字幕を焼き込み
         overlay_path_escaped = overlay_path.replace("\\", "/").replace(":", "\\:")

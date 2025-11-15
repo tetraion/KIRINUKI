@@ -66,6 +66,23 @@ def format_timestamp_srt(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
+def format_timestamp_ass(seconds: float) -> str:
+    """
+    秒数をASS形式のタイムスタンプに変換
+
+    Args:
+        seconds: 秒数
+
+    Returns:
+        ASS形式のタイムスタンプ（例: 0:01:23.45）
+    """
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    centisecs = int((seconds % 1) * 100)
+    return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
+
+
 def generate_srt_from_segments(segments: list, output_path: str) -> None:
     """
     WhisperのセグメントデータからSRTファイルを生成
@@ -83,6 +100,67 @@ def generate_srt_from_segments(segments: list, output_path: str) -> None:
             f.write(f"{i}\n")
             f.write(f"{start_time} --> {end_time}\n")
             f.write(f"{text}\n\n")
+
+
+def generate_ass_from_segments(segments: list, output_path: str) -> None:
+    """
+    WhisperのセグメントデータからASS字幕ファイルを生成
+    大きく太く見やすいスタイルで、画面下部やや上に配置
+
+    Args:
+        segments: Whisperの文字起こし結果のセグメントリスト
+        output_path: 出力するASSファイルのパス
+    """
+    # ASSヘッダー
+    header = """[Script Info]
+Title: Whisper Subtitles
+ScriptType: v4.00+
+WrapStyle: 2
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Hiragino Sans,110,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,4,2,50,50,40,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(header)
+
+        for segment in segments:
+            start_time = format_timestamp_ass(segment["start"])
+            end_time = format_timestamp_ass(segment["end"])
+            text = segment["text"].strip()
+
+            # エスケープ処理（先に実行）
+            text_escaped = text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+
+            # 長い文を自動改行（約20文字で改行）
+            if len(text) > 20:
+                # 文の中間あたりで改行（句読点を優先）
+                mid = len(text) // 2
+                # 句読点を探す
+                break_chars = ['、', '。', 'が', 'て', 'で', 'し', 'を', 'は', 'の', 'と']
+                best_pos = mid
+                min_dist = len(text)
+
+                for char in break_chars:
+                    pos = text.find(char, max(0, mid - 10), min(len(text), mid + 10))
+                    if pos != -1:
+                        dist = abs(pos - mid)
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_pos = pos + 1
+
+                # 改行を挿入（ASSの改行タグは\N）
+                if best_pos > 0 and best_pos < len(text):
+                    text_escaped = text_escaped[:best_pos] + "\\N" + text_escaped[best_pos:]
+
+            f.write(f"Dialogue: 0,{start_time},{end_time},Default,,0,0,0,,{text_escaped}\n")
 
 
 def generate_subtitles_with_whisper(
@@ -141,7 +219,14 @@ def generate_subtitles_with_whisper(
         print(f"Generating SRT file...")
         generate_srt_from_segments(result["segments"], output_path)
 
-        print(f"✓ Subtitles generated: {output_path}")
+        # ASSファイルも生成（スタイル付き字幕用）
+        ass_output_path = output_path.replace(".srt", ".ass")
+        print(f"Generating ASS file (styled subtitles)...")
+        generate_ass_from_segments(result["segments"], ass_output_path)
+
+        print(f"✓ Subtitles generated:")
+        print(f"  SRT: {output_path}")
+        print(f"  ASS: {ass_output_path}")
         print(f"  Detected language: {result.get('language', 'unknown')}")
         print(f"  Number of segments: {len(result['segments'])}")
 

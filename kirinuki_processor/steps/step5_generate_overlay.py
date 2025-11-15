@@ -19,15 +19,15 @@ class OverlayConfig:
     video_width: int = 1920
     video_height: int = 1080
 
-    # チャット表示エリア（右上）
-    chat_area_width: int = 400
-    chat_area_x: int = 1520  # 右端から400pxの位置
+    # チャット表示エリア（右側）
+    chat_area_width: int = 500
+    chat_area_x: int = 1350  # 右側に余裕を持たせた位置
     chat_area_y_start: int = 400  # 下部から開始（最も下）
-    chat_area_y_spacing: int = 45  # 各コメント間の間隔（狭く）
+    chat_area_y_spacing: int = 70  # 各コメント間の間隔
 
     # フォント設定
-    font_name: str = "Arial"
-    font_size: int = 28  # より大きく
+    font_name: str = "Hiragino Sans"
+    font_size: int = 55  # 字幕（110px）の50%
 
     # 色設定（ASS形式: &HAABBGGRR）
     text_color: str = "&H00FFFFFF"  # 白
@@ -38,8 +38,8 @@ class OverlayConfig:
     max_visible_messages: int = 7  # 同時に表示する最大メッセージ数
 
     # スタイル設定
-    outline_width: int = 2
-    shadow_depth: int = 1
+    outline_width: int = 3
+    shadow_depth: int = 2
     margin_v: int = 10  # 垂直マージン
     margin_r: int = 20  # 右マージン
 
@@ -135,6 +135,13 @@ def generate_chat_overlay(
     max_visible = config.max_visible_messages
     slide_duration = 0.3  # スライドアニメーションの時間（秒）
 
+    # 各メッセージが2行かどうかを事前に判定
+    # 55pxフォントで570px幅 → 約12文字が1行の限界
+    is_two_line = []
+    for msg in chat_messages:
+        message_text = msg.get("message", "")
+        is_two_line.append(len(message_text) > 12)
+
     # ASSファイルを生成
     with open(output_path, "w", encoding="utf-8") as f:
         # ヘッダーを書き込み
@@ -176,11 +183,39 @@ def generate_chat_overlay(
                     continue
 
                 # Y座標を計算（slot 0が最下部、上に向かって減少）
-                y_position = config.chat_area_y_start - (slot * config.chat_area_y_spacing)
+                # 2行コメントの累積高さを考慮
+                y_offset = 0
+                for k in range(i, i + slot):
+                    if k < len(is_two_line) and is_two_line[k]:
+                        y_offset += config.chat_area_y_spacing * 2  # 2行コメントは2倍の高さ
+                    else:
+                        y_offset += config.chat_area_y_spacing
+
+                y_position = config.chat_area_y_start - y_offset
                 x_pos = config.chat_area_x
 
                 # エスケープ処理
                 message_escaped = message_text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+
+                # 長いコメントを2行に分割（約12文字以上）
+                if len(message_text) > 12:
+                    # 最初の12文字以内で改行位置を探す（句読点や助詞を優先）
+                    break_chars = ['、', '。', 'が', 'て', 'で', 'し', 'を', 'は', 'の', 'と', ' ']
+                    best_pos = 6  # デフォルトは半分
+
+                    # 6〜12文字の範囲で改行文字を探す（後ろから優先）
+                    for pos in range(min(12, len(message_text)), 5, -1):
+                        if pos < len(message_text) and message_text[pos-1] in break_chars:
+                            best_pos = pos
+                            break
+
+                    # 改行文字が見つからなければ12文字で強制分割
+                    if best_pos < 6:
+                        best_pos = min(12, len(message_text) // 2)
+
+                    # 改行を挿入（ASSの改行タグは\N）
+                    if best_pos > 0 and best_pos < len(message_text):
+                        message_escaped = message_escaped[:best_pos] + "\\N" + message_escaped[best_pos:]
 
                 start_str = ass_time_format(segment_start)
                 end_str = ass_time_format(segment_end)
@@ -190,7 +225,14 @@ def generate_chat_overlay(
                     # 次のスロット位置（上に移動）
                     # slot 6の場合は画面外に移動（さらに上）
                     next_slot = slot + 1
-                    y_next = config.chat_area_y_start - (next_slot * config.chat_area_y_spacing)
+                    # 次の位置も2行コメントを考慮して計算
+                    y_next_offset = 0
+                    for k in range(i, i + next_slot):
+                        if k < len(is_two_line) and is_two_line[k]:
+                            y_next_offset += config.chat_area_y_spacing * 2  # 2行コメントは2倍の高さ
+                        else:
+                            y_next_offset += config.chat_area_y_spacing
+                    y_next = config.chat_area_y_start - y_next_offset
 
                     # 通常のスライドアニメーション
                     # スライドアニメーションの開始時刻（次のメッセージの少し前）

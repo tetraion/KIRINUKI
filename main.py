@@ -198,7 +198,8 @@ def run_compose_pipeline(config_path: str) -> bool:
 
     # ファイルパスを定義
     clip_video_path = os.path.join(config.temp_dir, "clip.webm")
-    subs_clip_path = os.path.join(config.temp_dir, "subs_clip.srt")
+    subs_clip_path_srt = os.path.join(config.temp_dir, "subs_clip.srt")
+    subs_clip_path_ass = os.path.join(config.temp_dir, "subs_clip.ass")
     chat_overlay_path = os.path.join(config.temp_dir, "chat_overlay.ass")
     final_output_path = os.path.join(config.output_dir, "final.mp4")
 
@@ -218,9 +219,13 @@ def run_compose_pipeline(config_path: str) -> bool:
     print(f"  Video: {video_source_path}")
 
     subtitle_path = None
-    if os.path.exists(subs_clip_path):
-        subtitle_path = subs_clip_path
-        print(f"  Subtitles: {subs_clip_path}")
+    # ASSファイルを優先、なければSRTを使用
+    if os.path.exists(subs_clip_path_ass):
+        subtitle_path = subs_clip_path_ass
+        print(f"  Subtitles: {subs_clip_path_ass} (styled)")
+    elif os.path.exists(subs_clip_path_srt):
+        subtitle_path = subs_clip_path_srt
+        print(f"  Subtitles: {subs_clip_path_srt}")
     else:
         print(f"  Subtitles: (none)")
 
