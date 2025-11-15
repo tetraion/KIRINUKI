@@ -74,26 +74,21 @@ def compose_video(
     # ロゴがある場合はfilter_complexを使用
     filters = []
 
-    # 字幕、チャット、タイトルバー
-    ass_filters = []
-    if subtitle_path and os.path.exists(subtitle_path):
-        subtitle_path_escaped = subtitle_path.replace("\\", "/").replace(":", "\\:")
-        if subtitle_path.endswith(".ass"):
-            ass_filters.append(f"ass={subtitle_path_escaped}")
-        else:
-            ass_filters.append(f"subtitles={subtitle_path_escaped}")
+    target_width = config_video_width = None
+    target_height = config_video_height = None
+    if os.path.exists(video_path):
+        res = get_video_resolution(video_path)
+        if res:
+            target_width, target_height = res
+    if not target_width:
+        target_width = 1920
+    if not target_height:
+        target_height = 1080
 
-    if overlay_path and os.path.exists(overlay_path):
-        overlay_path_escaped = overlay_path.replace("\\", "/").replace(":", "\\:")
-        ass_filters.append(f"ass={overlay_path_escaped}")
+    video_filters = []
 
-    if title_overlay_path and os.path.exists(title_overlay_path):
-        title_overlay_path_escaped = title_overlay_path.replace("\\", "/").replace(":", "\\:")
-        ass_filters.append(f"ass={title_overlay_path_escaped}")
-
-    # クロップフィルター（パーセンテージ指定）
-    crop_filters = []
     crop_params = [crop_top_percent, crop_bottom_percent, crop_left_percent, crop_right_percent]
+    crop_applied = False
     if any(param > 0 for param in crop_params):
         left_frac = max(0.0, crop_left_percent / 100.0)
         right_frac = max(0.0, crop_right_percent / 100.0)
@@ -126,11 +121,30 @@ def compose_video(
             f"iw*{left_frac:.6f}:"
             f"ih*{top_frac:.6f}"
         )
-        crop_filters.append(crop_expr)
+        video_filters.append(crop_expr)
+        crop_applied = True
 
-    combined_video_filter = ",".join(ass_filters + crop_filters)
-    if combined_video_filter:
-        filters.append(combined_video_filter)
+    if crop_applied:
+        video_filters.append(f"scale={target_width}:{target_height}")
+
+    # 字幕、チャット、タイトルバーはクロップ/スケール後の映像に適用
+    if subtitle_path and os.path.exists(subtitle_path):
+        subtitle_path_escaped = subtitle_path.replace("\\", "/").replace(":", "\\:")
+        if subtitle_path.endswith(".ass"):
+            video_filters.append(f"ass={subtitle_path_escaped}")
+        else:
+            video_filters.append(f"subtitles={subtitle_path_escaped}")
+
+    if overlay_path and os.path.exists(overlay_path):
+        overlay_path_escaped = overlay_path.replace("\\", "/").replace(":", "\\:")
+        video_filters.append(f"ass={overlay_path_escaped}")
+
+    if title_overlay_path and os.path.exists(title_overlay_path):
+        title_overlay_path_escaped = title_overlay_path.replace("\\", "/").replace(":", "\\:")
+        video_filters.append(f"ass={title_overlay_path_escaped}")
+
+    if video_filters:
+        filters.append(",".join(video_filters))
 
     filter_parts = []
     if filters:
