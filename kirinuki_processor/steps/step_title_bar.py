@@ -38,11 +38,14 @@ def generate_title_bar(
 
     # フォント設定
     font_name = "Hiragino Sans"
+    # チャンネル名はより視認性の高い太字フォントとする
+    channel_font_name = "Hiragino Sans W9"
     font_size = 90  # 65→90に拡大
 
     # 色設定（ASS形式: &HAABBGGRR、BGRの順）
     text_color = "&H00000000"  # 黒（黄色背景に対して）
     outline_color = "&H00FFFFFF"  # 白アウトライン
+    channel_outline_color = "&H00404040"  # チャンネル名は濃いめの縁取りで視認性アップ
     # 黄色 RGB(255, 229, 0) → BGR(0, 229, 255) = 00E5FF
     bar_bg_color = "&H0000E5FF"  # 黄色（完全不透明、AA=00）
     # 青色 RGB(0, 120, 215) → BGR(215, 120, 0) = D77800
@@ -75,7 +78,7 @@ ScaledBorderAndShadow: yes
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: TitleText,{font_name},{font_size},{text_color},&H000000FF,{outline_color},&H00000000,-1,0,0,0,100,100,0,0,1,5,3,7,30,30,0,1
 Style: TitleBar,Arial,20,{bar_bg_color},&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
-Style: ChannelName,{font_name},45,&H00FFFFFF,&H000000FF,{outline_color},&H00000000,-1,0,0,0,100,100,0,0,1,3,2,7,30,30,0,1
+Style: ChannelName,{channel_font_name},48,&H00FFFFFF,&H000000FF,{channel_outline_color},&H00000000,-1,0,0,0,100,100,0,0,1,4,2,7,30,30,0,1
 Style: ChannelBg,Arial,20,{channel_bg_color},&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 
 [Events]
