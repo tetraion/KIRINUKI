@@ -136,33 +136,35 @@ def generate_youtube_description(
     srt_path: str,
     output_path: str,
     prompt_template_path: str = "data/input/setumei",
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.3-70b-versatile",
+    video_url: Optional[str] = None
 ) -> bool:
     """
     SRT字幕からYouTube説明欄を生成
-    
+
     Args:
         srt_path: SRTファイルのパス
         output_path: 出力するテキストファイルのパス
         prompt_template_path: プロンプトテンプレートのパス
         model: 使用するGroqモデル名
-    
+        video_url: 元動画のURL（指定された場合は説明文に挿入）
+
     Returns:
         bool: 生成に成功したかどうか
     """
     print(f"[Step 7] Generating YouTube description...")
-    
+
     try:
         # 1. SRTからトランスクリプトを抽出
         print(f"  Extracting transcript from SRT...")
         transcript = extract_transcript_from_srt(srt_path)
         print(f"  ✓ Extracted {len(transcript)} characters")
-        
+
         # 2. プロンプトテンプレートを読み込み
         print(f"  Loading prompt template...")
         prompt_template = load_prompt_template(prompt_template_path)
         print(f"  ✓ Loaded template from {prompt_template_path}")
-        
+
         # 3. Groq APIでYouTube説明欄を生成
         print(f"  Generating description with Groq API (model: {model})...")
         description = generate_description_with_groq(
@@ -171,21 +173,35 @@ def generate_youtube_description(
             model=model
         )
         print(f"  ✓ Generated {len(description)} characters")
-        
-        # 4. 出力ディレクトリを作成
+
+        # 4. 元動画リンクを挿入
+        if video_url:
+            # 「【背景情報】」の後に元動画リンクを挿入
+            link_section = f"\n🎥【元動画】\n👉 {video_url}\n\n"
+            # チャンネルについての前に挿入
+            if "💬【チャンネルについて】" in description:
+                description = description.replace(
+                    "💬【チャンネルについて】",
+                    link_section + "💬【チャンネルについて】"
+                )
+            else:
+                # チャンネル情報がない場合は末尾に追加
+                description += link_section
+
+        # 5. 出力ディレクトリを作成
         output_dir = os.path.dirname(output_path)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
-        
-        # 5. ファイルに保存
+
+        # 6. ファイルに保存
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(description)
-        
+
         print(f"✓ YouTube description generated successfully!")
         print(f"  Output: {output_path}")
-        
+
         return True
-    
+
     except Exception as e:
         print(f"✗ Failed to generate YouTube description: {e}")
         return False

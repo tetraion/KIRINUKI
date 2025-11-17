@@ -313,7 +313,8 @@ def run_compose_pipeline(config_path: str) -> bool:
             success = generate_youtube_description(
                 subs_clip_path_srt,
                 description_output_path,
-                prompt_template_path="data/input/setumei"
+                prompt_template_path="data/input/setumei",
+                video_url=config.video_url
             )
             if success:
                 print(f"  Description: {description_output_path}")
