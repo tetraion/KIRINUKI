@@ -31,6 +31,7 @@ from kirinuki_processor.steps.step5_generate_overlay import (
 )
 from kirinuki_processor.steps.step6_compose_video import compose_video
 from kirinuki_processor.steps.step_title_bar import generate_title_bar
+from kirinuki_processor.steps.step7_generate_description import generate_youtube_description
 
 
 def run_prepare_pipeline(config_path: str) -> bool:
@@ -304,9 +305,28 @@ def run_compose_pipeline(config_path: str) -> bool:
         print(f"✗ Error in Step 5: {e}")
         return False
 
+    # ステップ6: YouTube説明欄生成（字幕が存在する場合）
+    description_output_path = os.path.join(config.output_dir, "description.txt")
+    if os.path.exists(subs_clip_path_srt):
+        print("\n[Step 6] Generating YouTube description...")
+        try:
+            success = generate_youtube_description(
+                subs_clip_path_srt,
+                description_output_path,
+                prompt_template_path="data/input/setumei"
+            )
+            if success:
+                print(f"  Description: {description_output_path}")
+        except Exception as e:
+            print(f"  Note: Failed to generate description: {e}")
+    else:
+        print("\n[Step 6] Skipped (no subtitles available)")
+
     print("\n" + "=" * 60)
     print("✓ Composition completed successfully!")
     print(f"  Final output: {final_output_path}")
+    if os.path.exists(description_output_path):
+        print(f"  Description: {description_output_path}")
     print("=" * 60)
 
     return True
@@ -573,6 +593,16 @@ def run_single_step(step_num: int, args: argparse.Namespace) -> bool:
         )
         return success
 
+    elif step_num == 6:
+        # YouTube説明欄生成
+        success = generate_youtube_description(
+            args.input,
+            args.output,
+            prompt_template_path=args.prompt if hasattr(args, 'prompt') else "data/input/setumei",
+            model=args.model if hasattr(args, 'model') else "llama-3.3-70b-versatile"
+        )
+        return success
+
     else:
         print(f"Unknown step: {step_num}")
         return False
@@ -651,6 +681,13 @@ def main():
     step5_parser.add_argument("-o", "--output", required=True, help="Output video file")
     step5_parser.add_argument("-s", "--subtitle", help="Subtitle file (SRT)")
     step5_parser.add_argument("-c", "--overlay", help="Chat overlay file (ASS)")
+
+    # Step 6 (YouTube説明欄生成)
+    step6_parser = subparsers.add_parser("step6", help="Generate YouTube description")
+    step6_parser.add_argument("-i", "--input", required=True, help="Input SRT file")
+    step6_parser.add_argument("-o", "--output", required=True, help="Output text file")
+    step6_parser.add_argument("-p", "--prompt", default="data/input/setumei", help="Prompt template file (default: data/input/setumei)")
+    step6_parser.add_argument("-m", "--model", default="llama-3.3-70b-versatile", help="Groq model name (default: llama-3.3-70b-versatile)")
 
     args = parser.parse_args()
 

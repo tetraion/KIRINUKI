@@ -34,10 +34,14 @@ data/input/*
 !data/temp/.gitkeep
 !data/output/.gitkeep
 !data/input/.gitkeep
+!data/input/setumei
+!data/input/*.png
 
 # Config files with sensitive data
 config.txt
 .mcp.json
+.env.local
+.env
 
 # Temporary test files
 便利ツール/

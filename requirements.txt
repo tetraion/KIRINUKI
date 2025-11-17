@@ -8,6 +8,10 @@ openai-whisper>=20231117
 torch>=2.0.0
 torchaudio>=2.0.0
 
+# AI生成（YouTube説明欄）
+groq>=0.4.0
+python-dotenv>=1.0.0
+
 # テスト
 pytest>=7.0.0
 pytest-cov>=4.0.0

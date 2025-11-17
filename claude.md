@@ -33,18 +33,26 @@
 
 **出力**：
 - `subs_clip.srt`（生成された字幕、切り抜き0秒基準）
+- `subs_clip.ass`（スタイル付き字幕、自動生成）
 
 **技術**：
 - OpenAI Whisper（音声認識モデル）
 - デフォルト：`large`モデル（最高精度）
 - 他のモデル：`tiny`, `base`, `small`, `medium`
 - 言語：日本語（`ja`）
-- 出力形式：SRT（SubRip）
+- 出力形式：SRT（SubRip）、ASS（Advanced SubStation Alpha）
+
+**字幕スタイル（ASS）**：
+- フォント：Hiragino Sans 110px
+- 色：白文字（`&H00FFFFFF`）、黒アウトライン（7px）
+- 配置：画面下部中央、縦マージン40px
+- 自動改行：20文字を超える場合、句読点で2行に分割
 
 **備考**：
 - 切り抜き済み動画を入力するため、タイムスタンプは0秒起点で生成される
 - YouTube字幕より精度が高い（特にlargeモデル）
 - 処理時間：5分動画でlargeモデル10-20分程度（CPU環境）
+- SRTを編集後、compose時に自動的にASSへ再変換される
 
 ---
 
@@ -97,15 +105,23 @@
 
 ### ステップ4：チャット表示用オーバーレイの生成
 
-**説明**：チャットメッセージをライブチャット風に表示するためのASS字幕オーバーレイを作成する。
+**説明**：チャットメッセージをニコニコ動画風に表示するためのASS字幕オーバーレイを作成する。
 
-**デザイン仕様**：
-- 右側にチャットエリアを配置
-- 常に最大7件のコメントを表示（スロット方式）
-- 新しいコメントが下部（slot 0）に追加され、古いコメントは上にシフト
-- 7件を超えると最古のコメントが消える
+**デザイン仕様（ニコニコ動画風）**：
+- 画面を横切る流れるコメント（右→左）
+- レーン方式で複数のコメントを同時表示（デフォルト：6レーン）
+- レーン配置：画面上部（Y=260px〜、タイトルバーと被らない）
+- レーン間隔：70px（下部の字幕を避ける）
+- コメント速度：380px/秒
+- レーン割り当て：最も早く空くレーンを選択
+- レーン再利用：前のコメント終了後0.25秒の余白
+
+**表示設定**：
+- フォント：Hiragino Sans 55px
+- 色：白文字（`&H00FFFFFF`）、黒アウトライン（3px）
 - メッセージのみ表示（投稿者名なし）
-- スライドアニメーション（0.3秒）
+- 開始位置：画面右端 + 80px（オフスクリーン）
+- 終了位置：コメント幅分だけ画面左外
 
 **入力**：
 - `chat_clip.json`（切り抜き区間のチャット）
@@ -116,34 +132,107 @@
 **技術**：
 - ASS（Advanced SubStation Alpha）形式で作成
 - タイムスタンプ形式：`h:mm:ss.cc`
-- アニメーション：`\move()`, `\fad()`タグ使用
+- アニメーション：`\move(x1,y1,x2,y2)`タグで横スクロール
+- 表示時間：コメント幅と速度から自動計算
 
 ---
 
-### ステップ5：動画合成（字幕＋チャットオーバーレイ）
+### ステップ4.5：タイトルバー生成（任意）
 
-**説明**：切り抜き動画に、Whisper字幕とチャットオーバーレイを重ねて最終動画を生成する。
+**説明**：設定ファイルで`TITLE`が指定されている場合、画面上部にスライドインアニメーション付きのタイトルバーを生成する。
+
+**入力**：
+- `TITLE`（設定ファイルで指定）
+
+**出力**：
+- `title_bar.ass`（ASS形式のタイトルバー）
+
+**デザイン仕様**：
+- **タイトルバー背景**：黄色（`&H0000E5FF`、RGB(255,229,0)）、高さ120px、Y=10px
+- **タイトルテキスト**：Hiragino Sans 90px、黒文字、白アウトライン（5px）
+- **チャンネル名背景**：青色（`&H00D77800`、RGB(0,120,215)）、高さ60px
+- **チャンネル名**：「ひろゆき視点」、Hiragino Sans W9 48px、白文字、濃いグレーアウトライン（4px）
+- **アニメーション**：左から右へスライドイン（1.2秒）
+- **配置**：ロゴ中心（X=105px）から画面右端まで展開
+- **表示時間**：動画終了まで表示（display_duration=Noneの場合）
+
+**技術**：
+- ASS（Advanced SubStation Alpha）形式で作成
+- `\clip()`タグでクリップ範囲を制御
+- `\t()`タグでアニメーション（クリップ範囲を徐々に拡大）
+- Layer構造：0=タイトルバー背景、1=タイトル文字、2=チャンネル名背景、3=チャンネル名文字
+
+---
+
+### ステップ5：動画合成（字幕＋チャットオーバーレイ＋タイトルバー＋ロゴ）
+
+**説明**：切り抜き動画に、Whisper字幕、チャットオーバーレイ、タイトルバー、ロゴを重ねて最終動画を生成する。
 
 **入力**：
 - `clip.webm`（切り抜き済み動画）
-- `subs_clip.srt`（Whisper生成字幕）
-- `chat_overlay.ass`（チャットオーバーレイ）
+- `subs_clip.ass`（Whisper生成字幕、スタイル付き）
+- `chat_overlay.ass`（チャットオーバーレイ、任意）
+- `title_bar.ass`（タイトルバー、TITLEが設定されている場合）
+- `data/input/ひろゆき視点【切り抜き】.png`（ロゴ画像、任意）
 
 **出力**：
-- `final.mp4`（完成品）
+- `final.mp4`（完成品、1920x1080）
+
+**処理フロー**：
+1. **クロップ**（CROP_*_PERCENTが設定されている場合）
+   - 上下左右を指定パーセンテージでクロップ
+   - アスペクト比16:9を維持するよう自動調整
+2. **スケール**：1920x1080にリサイズ
+3. **ロゴ合成**：画面左上（X=15px, Y=10px）に円形ロゴを配置（高さ180px）
+4. **字幕合成**：`subs_clip.ass`を適用
+5. **チャットオーバーレイ合成**：`chat_overlay.ass`を適用
+6. **タイトルバー合成**：`title_bar.ass`を適用
 
 **技術**：
 - FFmpegで合成
 - H.264エンコード（CRF 23、medium preset）
-- 字幕フィルター：`subtitles=` + `ass=`
+- フィルター：`crop`, `scale`, `overlay`, `subtitles`, `ass`
 
 **FFmpegコマンド例**：
 ```bash
-ffmpeg -i clip.webm \
-  -vf "subtitles=subs_clip.srt,ass=chat_overlay.ass" \
+ffmpeg -i clip.webm -i logo.png \
+  -filter_complex "[0:v]crop=...,scale=1920:1080,subtitles=subs_clip.ass,ass=chat_overlay.ass,ass=title_bar.ass[v_base];[1:v]scale=180:180,format=rgba,...[logo];[v_base][logo]overlay=15:10" \
   -c:v libx264 -preset medium -crf 23 \
   -c:a aac final.mp4
 ```
+
+---
+
+### ステップ6：YouTube説明欄生成（任意）
+
+**説明**：Whisper生成字幕（SRT）からトランスクリプトを抽出し、Groq APIを使用してYouTube説明欄の文章を自動生成する。
+
+**入力**：
+- `subs_clip.srt`（Whisper生成字幕）
+- `data/input/setumei`（プロンプトテンプレート）
+- `.env.local`（Groq APIキー）
+
+**出力**：
+- `description.txt`（生成されたYouTube説明欄、Markdown形式）
+
+**生成内容**：
+- 動画概要タイトル（20〜40文字）
+- 動画の要点・議題・主張のまとめ（2〜4行）
+- 元動画リンク（手動差し替え用プレースホルダー）
+- チャンネル説明（固定テキスト）
+- おすすめ関連動画（3つ）
+- 自動生成ハッシュタグ（5〜8個）
+
+**技術**：
+- Groq API（高速LLM推論）
+- デフォルトモデル：`llama-3.3-70b-versatile`
+- プロンプトエンジニアリング：SEO最適化、自然な文体
+
+**備考**：
+- compose時に自動実行される（字幕が存在する場合）
+- APIキーは`.env.local`に`GROQ_API_KEY=xxx`の形式で設定
+- 全体で300〜600文字程度に自動調整
+- プロンプトテンプレートはカスタマイズ可能
 
 ---
 
@@ -185,15 +274,20 @@ python main.py run config.txt
 
 ```
 data/
-├── input/          # 入力ファイル（必要に応じて）
+├── input/          # 入力ファイル
+│   ├── ひろゆき視点【切り抜き】.png  # ロゴ画像（任意）
+│   └── setumei                       # YouTube説明欄プロンプトテンプレート
 ├── temp/           # 一時ファイル
 │   ├── clip.webm
-│   ├── subs_clip.srt        # Whisper生成字幕
+│   ├── subs_clip.srt        # Whisper生成字幕（SRT）
+│   ├── subs_clip.ass        # Whisper生成字幕（ASSスタイル付き）
 │   ├── chat_full.json
 │   ├── chat_clip.json
-│   └── chat_overlay.ass
+│   ├── chat_overlay.ass     # ニコニコ風チャットオーバーレイ
+│   └── title_bar.ass        # タイトルバー（TITLEが指定されている場合）
 └── output/         # 完成動画
-    └── final.mp4
+    ├── final.mp4            # 最終出力（1920x1080）
+    └── description.txt      # YouTube説明欄（自動生成）
 ```
 
 ---
@@ -207,7 +301,26 @@ VIDEO_URL=https://www.youtube.com/watch?v=xxxxx
 START_TIME=00:05:30
 END_TIME=00:10:45
 AUTO_DOWNLOAD=true
+TITLE=動画のタイトル（任意）
 ```
+
+### クロップ設定
+
+```
+# 全方向を均等にクロップする場合
+CROP_PERCENT=5.0
+
+# または、個別に設定する場合
+CROP_TOP_PERCENT=5.0
+CROP_BOTTOM_PERCENT=5.0
+CROP_LEFT_PERCENT=3.0
+CROP_RIGHT_PERCENT=3.0
+```
+
+**注意**：
+- `CROP_PERCENT`を設定すると、上下左右すべてが同じ割合でクロップされます
+- 個別設定（`CROP_TOP_PERCENT`など）も可能です
+- クロップ後、アスペクト比16:9を維持するよう自動調整されます
 
 ### 既存動画を使用する場合
 
@@ -217,6 +330,19 @@ START_TIME=00:05:30
 END_TIME=00:10:45
 AUTO_DOWNLOAD=false
 WEBM_PATH=data/input/clip.webm
+```
+
+### 完全な設定例
+
+```
+VIDEO_URL=https://www.youtube.com/watch?v=xxxxx
+START_TIME=00:05:30
+END_TIME=00:10:45
+TITLE=ヤマトがベトナム人運転手500人採用
+AUTO_DOWNLOAD=true
+CROP_PERCENT=5.0
+OUTPUT_DIR=data/output
+TEMP_DIR=data/temp
 ```
 
 ---
@@ -261,6 +387,21 @@ WEBM_PATH=data/input/clip.webm
 ---
 
 ## 変更履歴
+
+- **2025-11-17**：AI生成機能の追加
+  - YouTube説明欄自動生成機能を追加（`step7_generate_description.py`）
+  - Groq API統合（高速LLM推論）
+  - プロンプトテンプレートのカスタマイズ機能
+  - `.env.local`による環境変数管理
+  - compose時に自動実行（字幕が存在する場合）
+
+- **2025-11-15**：UI/UX機能拡張
+  - タイトルバー生成機能を追加（`step_title_bar.py`）
+  - ニコニコ動画風の横スクロールチャット表示に変更（従来の右側固定表示から変更）
+  - ロゴ画像の合成機能を追加（円形ロゴ、画面左上）
+  - クロップ機能を追加（CROP_*_PERCENT設定）
+  - ASS字幕スタイルの自動生成・再生成機能
+  - 設定ファイルにTITLEパラメータを追加
 
 - **2025-11-14**：Whisperベースに全面刷新
   - YouTube字幕取得を削除
