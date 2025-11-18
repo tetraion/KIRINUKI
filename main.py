@@ -133,7 +133,8 @@ def run_prepare_pipeline(config_path: str) -> bool:
                 chat_full_path,
                 chat_clip_path,
                 config.start_time,
-                config.end_time
+                config.end_time,
+                delay_seconds=config.chat_delay_seconds
             )
             if count == 0:
                 chat_clip_path = None
@@ -175,6 +176,163 @@ def run_prepare_pipeline(config_path: str) -> bool:
     print(f"  1. Edit subtitles: {subs_clip_path}")
     print(f"  2. Run: python main.py compose {config_path}")
     print("=" * 60)
+
+    return True
+
+
+def run_resub_pipeline(config_path: str) -> bool:
+    """
+    字幕再生成パイプライン
+
+    既にprepareが完了している状態で、Whisper字幕だけを再生成するための簡易コマンド。
+    字幕が飛んでいる場合や、別のWhisperモデルで試したい場合に便利。
+
+    実行内容：
+    - Step 1: Whisper字幕生成（subs_clip.srt生成）
+
+    Args:
+        config_path: 設定ファイルのパス
+
+    Returns:
+        bool: 成功した場合True
+    """
+    print("=" * 60)
+    print("KIRINUKI PROCESSOR - RESUB PIPELINE")
+    print("=" * 60)
+    print("\nThis will regenerate subtitles with Whisper")
+    print("Make sure you have already run 'prepare' command.\n")
+
+    # 設定ファイルを読み込み
+    config = load_config_from_file(config_path)
+
+    # 一時ディレクトリを確認
+    if not os.path.exists(config.temp_dir):
+        print(f"✗ Error: temp directory not found: {config.temp_dir}")
+        print("  Please run 'prepare' command first.")
+        return False
+
+    # ファイルパスを定義
+    clip_video_path = os.path.join(config.temp_dir, "clip.webm")
+    subs_clip_path = os.path.join(config.temp_dir, "subs_clip.srt")
+
+    # clip.webmの存在確認
+    if not os.path.exists(clip_video_path):
+        print(f"✗ Error: clip.webm not found: {clip_video_path}")
+        print("  Please run 'prepare' command first.")
+        return False
+
+    # ステップ1: Whisper字幕生成
+    print("\n[Step 1] Generating subtitles with Whisper...")
+    try:
+        success = generate_subtitles_with_whisper(
+            clip_video_path,
+            subs_clip_path,
+            model_size="large",
+            language="ja"
+        )
+        if not success:
+            print("  ✗ Failed to generate subtitles")
+            return False
+    except Exception as e:
+        print(f"✗ Error in Step 1: {e}")
+        return False
+
+    print("\n" + "=" * 60)
+    print("RESUB PIPELINE COMPLETED!")
+    print("=" * 60)
+    print("\nNext steps:")
+    print(f"  1. Check subtitles: {subs_clip_path}")
+    print(f"  2. Run: python main.py compose {config_path}")
+    print()
+
+    return True
+
+
+def run_rechat_pipeline(config_path: str) -> bool:
+    """
+    チャット再生成パイプライン
+
+    既にprepareが完了している状態で、config.txtのCHAT_DELAY_SECONDSを変更した後に
+    チャットだけを再生成するための簡易コマンド。
+
+    実行内容：
+    - Step 3: チャット抽出（chat_clip.json生成）
+    - Step 4: オーバーレイ生成（chat_overlay.ass生成）
+
+    Args:
+        config_path: 設定ファイルのパス
+
+    Returns:
+        bool: 成功した場合True
+    """
+    print("=" * 60)
+    print("KIRINUKI PROCESSOR - RECHAT PIPELINE")
+    print("=" * 60)
+    print("\nThis will regenerate chat overlay with new CHAT_DELAY_SECONDS setting")
+    print("Make sure you have already run 'prepare' command.\n")
+
+    # 設定ファイルを読み込み
+    config = load_config_from_file(config_path)
+
+    # 一時ディレクトリを確認
+    if not os.path.exists(config.temp_dir):
+        print(f"✗ Error: temp directory not found: {config.temp_dir}")
+        print("  Please run 'prepare' command first.")
+        return False
+
+    # ファイルパスを定義
+    chat_full_path = os.path.join(config.temp_dir, "chat_full.json")
+    chat_clip_path = os.path.join(config.temp_dir, "chat_clip.json")
+    chat_overlay_path = os.path.join(config.temp_dir, "chat_overlay.ass")
+
+    # chat_full.jsonの存在確認
+    if not os.path.exists(chat_full_path):
+        print(f"✗ Error: chat_full.json not found: {chat_full_path}")
+        print("  Please run 'prepare' command first, or this video has no live chat.")
+        return False
+
+    # ステップ3: チャット抽出
+    print("\n[Step 3] Extracting chat messages for clip...")
+    print(f"  Chat delay: {config.chat_delay_seconds}s")
+    try:
+        count = load_and_extract_chat(
+            chat_full_path,
+            chat_clip_path,
+            config.start_time,
+            config.end_time,
+            delay_seconds=config.chat_delay_seconds
+        )
+        if count == 0:
+            print("  Warning: No chat messages in the specified time range")
+            chat_clip_path = None
+    except Exception as e:
+        print(f"✗ Error in Step 3: {e}")
+        return False
+
+    # ステップ4: オーバーレイ生成
+    if chat_clip_path:
+        print("\n[Step 4] Generating chat overlay...")
+        try:
+            overlay_config = OverlayConfig()
+            count = generate_overlay_from_file(
+                chat_clip_path,
+                chat_overlay_path,
+                overlay_config
+            )
+            if count == 0:
+                print("  Warning: No chat messages were added to overlay")
+        except Exception as e:
+            print(f"✗ Error in Step 4: {e}")
+            return False
+    else:
+        print("\n[Step 4] Skipped (no chat messages)")
+
+    print("\n" + "=" * 60)
+    print("RECHAT PIPELINE COMPLETED!")
+    print("=" * 60)
+    print("\nNext step:")
+    print(f"  python main.py compose {config_path}")
+    print()
 
     return True
 
@@ -452,7 +610,8 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
                 chat_full_path,
                 chat_clip_path,
                 config.start_time,
-                config.end_time
+                config.end_time,
+                delay_seconds=config.chat_delay_seconds
             )
             if count == 0:
                 chat_clip_path = None
@@ -592,7 +751,8 @@ def run_single_step(step_num: float, args: argparse.Namespace) -> bool:
             args.input,
             args.output,
             args.start,
-            args.end
+            args.end,
+            delay_seconds=args.delay if hasattr(args, 'delay') else 0.0
         )
         return count > 0
 
@@ -642,6 +802,14 @@ def main():
     # 素材準備パイプライン
     prepare_parser = subparsers.add_parser("prepare", help="Prepare materials (download, subtitles, chat) - stops before composing video")
     prepare_parser.add_argument("config", help="Configuration file path")
+
+    # 字幕再生成パイプライン
+    resub_parser = subparsers.add_parser("resub", help="Regenerate subtitles only (useful when Whisper subtitles have issues)")
+    resub_parser.add_argument("config", help="Configuration file path")
+
+    # チャット再生成パイプライン
+    rechat_parser = subparsers.add_parser("rechat", help="Regenerate chat overlay only (useful for adjusting CHAT_DELAY_SECONDS)")
+    rechat_parser.add_argument("config", help="Configuration file path")
 
     # 動画合成パイプライン
     compose_parser = subparsers.add_parser("compose", help="Compose final video using prepared materials")
@@ -699,6 +867,7 @@ def main():
     step3_parser.add_argument("-o", "--output", required=True, help="Output JSON file")
     step3_parser.add_argument("-s", "--start", required=True, help="Start time (hh:mm:ss)")
     step3_parser.add_argument("-e", "--end", help="End time (hh:mm:ss)")
+    step3_parser.add_argument("-d", "--delay", type=float, default=0.0, help="Chat display delay in seconds (default: 0)")
 
     # Step 4 (オーバーレイ生成)
     step4_parser = subparsers.add_parser("step4", help="Generate overlay")
@@ -730,6 +899,14 @@ def main():
     try:
         if args.command == "prepare":
             success = run_prepare_pipeline(args.config)
+            return 0 if success else 1
+
+        elif args.command == "resub":
+            success = run_resub_pipeline(args.config)
+            return 0 if success else 1
+
+        elif args.command == "rechat":
+            success = run_rechat_pipeline(args.config)
             return 0 if success else 1
 
         elif args.command == "compose":

@@ -26,7 +26,7 @@ class OverlayConfig:
     lane_gap: float = 0.25  # 同じレーンに再利用する際の余白秒数
 
     # タイムオフセット
-    visible_start_offset: float = 5.0  # 切り抜き冒頭のコメントを除外
+    visible_start_offset: float = 0.0  # 切り抜き冒頭から表示
 
     # 移動パラメータ
     comment_speed: float = 380.0  # ピクセル/秒

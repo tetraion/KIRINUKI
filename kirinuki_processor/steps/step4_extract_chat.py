@@ -28,7 +28,8 @@ class ChatMessage:
 def extract_chat_messages(
     messages: List[Dict[str, Any]],
     start_offset: float,
-    end_time: Optional[float] = None
+    end_time: Optional[float] = None,
+    delay_seconds: float = 0.0
 ) -> List[ChatMessage]:
     """
     チャットメッセージから必要な区間を抽出し、時間を調整
@@ -37,6 +38,7 @@ def extract_chat_messages(
         messages: 元のチャットメッセージリスト（chat-downloader形式）
         start_offset: 開始オフセット（秒）。この時間を0秒とする
         end_time: 終了時刻（秒）。指定された場合、これ以降のメッセージを削除
+        delay_seconds: チャット表示のオフセット（秒）。正の値でチャットを早く、負の値でチャットを遅く表示
 
     Returns:
         抽出・調整後のチャットメッセージリスト
@@ -62,8 +64,9 @@ def extract_chat_messages(
             else:
                 continue
 
-        # 時間を調整
-        adjusted_time = time_seconds - start_offset
+        # 時間を調整（start_offsetで0秒基準にし、delay_secondsでずらす）
+        # 正の値でチャットを早く、負の値でチャットを遅く表示
+        adjusted_time = time_seconds - start_offset - delay_seconds
 
         # 範囲外のメッセージをスキップ
         if adjusted_time < 0:
@@ -102,7 +105,8 @@ def load_and_extract_chat(
     input_path: str,
     output_path: str,
     start_time: str,
-    end_time: Optional[str] = None
+    end_time: Optional[str] = None,
+    delay_seconds: float = 0.0
 ) -> int:
     """
     チャットファイルを読み込み、区間抽出して保存
@@ -112,6 +116,7 @@ def load_and_extract_chat(
         output_path: 出力チャットJSONファイルのパス
         start_time: 切り抜き開始時刻（"hh:mm:ss" 形式）
         end_time: 切り抜き終了時刻（"hh:mm:ss" 形式、任意）
+        delay_seconds: チャット表示のオフセット（秒）。正の値でチャットを早く、負の値でチャットを遅く表示
 
     Returns:
         抽出されたチャットメッセージの数
@@ -142,7 +147,7 @@ def load_and_extract_chat(
     end_offset = parse_time(end_time) if end_time else None
 
     # 区間抽出
-    extracted = extract_chat_messages(messages, start_offset, end_offset)
+    extracted = extract_chat_messages(messages, start_offset, end_offset, delay_seconds)
 
     # JSON形式で保存（整形して読みやすく）
     with open(output_path, "w", encoding="utf-8") as f:
@@ -159,6 +164,8 @@ def load_and_extract_chat(
     print(f"  Start offset: {start_time} ({start_offset}s)")
     if end_time:
         print(f"  End time: {end_time} ({end_offset}s)")
+    if delay_seconds != 0:
+        print(f"  Chat delay: {delay_seconds}s")
 
     return len(extracted)
 

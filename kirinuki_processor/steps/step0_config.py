@@ -29,6 +29,7 @@ class ClipConfig:
     crop_bottom_percent: float = 0.0
     crop_left_percent: float = 0.0
     crop_right_percent: float = 0.0
+    chat_delay_seconds: float = 0.0  # ライブチャット表示の遅延（秒）
 
     def validate(self) -> None:
         """設定の妥当性をチェック"""
@@ -131,6 +132,9 @@ def load_config_from_file(config_path: str) -> ClipConfig:
         except ValueError:
             raise ValueError("CROP_PERCENT must be a number")
 
+    # チャットディレイを取得
+    chat_delay = float(config_dict.get("CHAT_DELAY_SECONDS", 0.0))
+
     # ClipConfigオブジェクトを作成
     config = ClipConfig(
         video_url=config_dict["VIDEO_URL"],
@@ -145,6 +149,7 @@ def load_config_from_file(config_path: str) -> ClipConfig:
         crop_bottom_percent=crop_bottom,
         crop_left_percent=crop_left,
         crop_right_percent=crop_right,
+        chat_delay_seconds=chat_delay,
     )
 
     # バリデーション
@@ -197,6 +202,12 @@ TEMP_DIR=data/temp
 # CROP_BOTTOM_PERCENT=0
 # CROP_LEFT_PERCENT=0
 # CROP_RIGHT_PERCENT=0
+
+# ライブチャット表示のオフセット（任意、デフォルト: 0、単位: 秒）
+# 配信のディレイでチャットが早すぎる場合、正の値でチャットを遅らせることができます
+# 例: チャットが10秒早い場合 → CHAT_DELAY_SECONDS=10（チャットを10秒遅らせる）
+# 例: チャットが10秒遅い場合 → CHAT_DELAY_SECONDS=-10（チャットを10秒早める）
+# CHAT_DELAY_SECONDS=0
 """
 
     with open(output_path, "w", encoding="utf-8") as f:
