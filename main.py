@@ -23,6 +23,7 @@ from kirinuki_processor.steps.step1_generate_subtitles import (
     generate_subtitles_with_whisper,
     convert_srt_to_ass
 )
+from kirinuki_processor.steps.step1_5_fix_subtitles import fix_subtitle_file
 from kirinuki_processor.steps.step3_fetch_chat import fetch_chat
 from kirinuki_processor.steps.step4_extract_chat import load_and_extract_chat
 from kirinuki_processor.steps.step5_generate_overlay import (
@@ -525,12 +526,12 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
     return True
 
 
-def run_single_step(step_num: int, args: argparse.Namespace) -> bool:
+def run_single_step(step_num: float, args: argparse.Namespace) -> bool:
     """
     単一ステップを実行
 
     Args:
-        step_num: ステップ番号
+        step_num: ステップ番号（1.5などの小数も可）
         args: コマンドライン引数
 
     Returns:
@@ -557,6 +558,27 @@ def run_single_step(step_num: int, args: argparse.Namespace) -> bool:
             model_size=args.model if hasattr(args, 'model') else "large",
             language=args.language if hasattr(args, 'language') else "ja"
         )
+        return success
+
+    elif step_num == 1.5:
+        # 字幕修正
+        method = args.method if hasattr(args, 'method') else "rule-based"
+
+        if method == "ai":
+            # AIベースで修正
+            from kirinuki_processor.steps.step1_5_fix_subtitles_ai import fix_subtitle_file_ai
+            success = fix_subtitle_file_ai(
+                args.input,
+                args.output,
+                model=args.model if hasattr(args, 'model') else "llama-3.3-70b-versatile"
+            )
+        else:
+            # ルールベースで修正
+            success = fix_subtitle_file(
+                args.input,
+                args.output,
+                model="rule-based"
+            )
         return success
 
     elif step_num == 2:
@@ -659,6 +681,13 @@ def main():
     step1_parser.add_argument("-m", "--model", default="large", choices=["tiny", "base", "small", "medium", "large"], help="Whisper model size (default: large)")
     step1_parser.add_argument("-l", "--language", default="ja", help="Language code (default: ja)")
 
+    # Step 1.5 (字幕修正)
+    step1_5_parser = subparsers.add_parser("step1.5", help="Fix subtitles")
+    step1_5_parser.add_argument("-i", "--input", required=True, help="Input SRT file")
+    step1_5_parser.add_argument("-o", "--output", required=True, help="Output SRT file")
+    step1_5_parser.add_argument("--method", choices=["rule-based", "ai"], default="rule-based", help="Correction method: rule-based (fast, safe) or ai (smarter, requires API)")
+    step1_5_parser.add_argument("-m", "--model", default="llama-3.3-70b-versatile", help="Groq model name for AI method (default: llama-3.3-70b-versatile)")
+
     # Step 2 (チャット取得)
     step2_parser = subparsers.add_parser("step2", help="Fetch live chat")
     step2_parser.add_argument("url", help="YouTube video URL")
@@ -716,7 +745,8 @@ def main():
             return 0
 
         elif args.command.startswith("step"):
-            step_num = int(args.command[4:])
+            step_str = args.command[4:]
+            step_num = float(step_str) if '.' in step_str else int(step_str)
             success = run_single_step(step_num, args)
             return 0 if success else 1
 
