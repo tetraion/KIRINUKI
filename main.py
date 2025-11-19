@@ -1393,6 +1393,28 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
     return True
 
 
+SHORT_OVERLAY_DEFAULTS = {
+    'TOP_TEXT': '',
+    'BOTTOM_TEXT': '',
+    'TOP_TEXT_COLOR': 'white',
+    'BOTTOM_TEXT_COLOR': 'white',
+    'TOP_TEXT_SIZE': '72',
+    'BOTTOM_TEXT_SIZE': '64',
+    'TOP_TEXT_FONT': '',
+    'BOTTOM_TEXT_FONT': '',
+    'TOP_TEXT_BOX_COLOR': 'black@0.65',
+    'BOTTOM_TEXT_BOX_COLOR': 'black@0.65',
+    'TOP_TEXT_BOX_BORDER': '28',
+    'BOTTOM_TEXT_BOX_BORDER': '28',
+    'TOP_TEXT_BOX': '1',
+    'BOTTOM_TEXT_BOX': '1',
+    'TOP_TEXT_WRAP': '1',
+    'BOTTOM_TEXT_WRAP': '0',
+    'TOP_TEXT_WRAP_WIDTH': '14',
+    'BOTTOM_TEXT_WRAP_WIDTH': '20'
+}
+
+
 def load_short_config(config_path: str) -> dict:
     """
     ショート動画設定ファイルを読み込む
@@ -1411,6 +1433,7 @@ def load_short_config(config_path: str) -> dict:
         'OUTPUT': 'data/output/short.mp4',
         'scenes': []  # 複数シーンを格納
     }
+    config.update(SHORT_OVERLAY_DEFAULTS)
 
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -1465,6 +1488,101 @@ def load_short_config(config_path: str) -> dict:
     return config
 
 
+def _clean_str_value(value: Any, default: str = '') -> str:
+    """設定値を文字列としてクリーンアップ"""
+    if value is None:
+        return default
+    return str(value).strip()
+
+
+def _parse_int_value(value: Any, default: int) -> int:
+    """設定値を整数としてパース"""
+    if value is None:
+        return default
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_bool_value(value: Any, default: bool) -> bool:
+    """設定値を真偽値としてパース"""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _decode_overlay_text(value: str) -> str:
+    """\\nなどのエスケープシーケンスを実文字に展開"""
+    if not value:
+        return value
+    return value.replace('\\n', '\n').replace('\\r', '')
+
+
+def _auto_wrap_text(text: str, max_chars: int) -> str:
+    """指定文字数で自動改行"""
+    if not text or max_chars <= 0:
+        return text
+    result_lines = []
+    for segment in text.split('\n'):
+        if not segment:
+            result_lines.append('')
+            continue
+        line = ''
+        for ch in segment:
+            line += ch
+            if len(line) >= max_chars:
+                result_lines.append(line)
+                line = ''
+        if line:
+            result_lines.append(line)
+    return '\n'.join(result_lines)
+
+
+def build_overlay_settings(config: dict) -> dict:
+    """
+    ショート動画用の上下テキスト設定を構築
+    """
+    top_text = _decode_overlay_text(_clean_str_value(config.get('TOP_TEXT')))
+    bottom_text = _decode_overlay_text(_clean_str_value(config.get('BOTTOM_TEXT')))
+
+    overlay = {
+        'top_text': top_text,
+        'bottom_text': bottom_text,
+        'top_font': _clean_str_value(config.get('TOP_TEXT_FONT')),
+        'bottom_font': _clean_str_value(config.get('BOTTOM_TEXT_FONT')),
+        'top_color': _clean_str_value(config.get('TOP_TEXT_COLOR'), 'white') or 'white',
+        'bottom_color': _clean_str_value(config.get('BOTTOM_TEXT_COLOR'), 'white') or 'white',
+        'top_fontsize': _parse_int_value(config.get('TOP_TEXT_SIZE'), 72),
+        'bottom_fontsize': _parse_int_value(config.get('BOTTOM_TEXT_SIZE'), 64),
+        'top_box_color': _clean_str_value(config.get('TOP_TEXT_BOX_COLOR'), 'black@0.7') or 'black@0.7',
+        'bottom_box_color': _clean_str_value(config.get('BOTTOM_TEXT_BOX_COLOR'), 'black@0.7') or 'black@0.7',
+        'top_box_border': _parse_int_value(config.get('TOP_TEXT_BOX_BORDER'), 28),
+        'bottom_box_border': _parse_int_value(config.get('BOTTOM_TEXT_BOX_BORDER'), 28),
+        'top_wrap': _parse_bool_value(config.get('TOP_TEXT_WRAP'), True),
+        'bottom_wrap': _parse_bool_value(config.get('BOTTOM_TEXT_WRAP'), False),
+        'top_wrap_chars': _parse_int_value(config.get('TOP_TEXT_WRAP_WIDTH'), 14),
+        'bottom_wrap_chars': _parse_int_value(config.get('BOTTOM_TEXT_WRAP_WIDTH'), 20)
+    }
+    overlay['top_box'] = _parse_bool_value(
+        config.get('TOP_TEXT_BOX'),
+        bool(overlay['top_text'])
+    )
+    overlay['bottom_box'] = _parse_bool_value(
+        config.get('BOTTOM_TEXT_BOX'),
+        bool(overlay['bottom_text'])
+    )
+
+    if overlay['top_wrap'] and overlay['top_text']:
+        overlay['top_text'] = _auto_wrap_text(overlay['top_text'], overlay['top_wrap_chars'])
+    if overlay['bottom_wrap'] and overlay['bottom_text']:
+        overlay['bottom_text'] = _auto_wrap_text(overlay['bottom_text'], overlay['bottom_wrap_chars'])
+
+    return overlay
+
+
 def run_short_pipeline(config_path: str) -> bool:
     """
     ショート動画生成パイプライン（複数シーン対応）
@@ -1485,9 +1603,14 @@ def run_short_pipeline(config_path: str) -> bool:
         print(f"\n✓ Configuration loaded: {config_path}")
         print(f"  Input video: {config['INPUT_VIDEO']}")
         print(f"  Scenes: {len(config['scenes'])}")
+        overlay_settings = build_overlay_settings(config)
         for i, scene in enumerate(config['scenes'], 1):
             print(f"    Scene {i}: {scene['start']} - {scene['end']}")
         print(f"  Output: {config['OUTPUT']}")
+        if overlay_settings.get('top_text'):
+            print(f"  Top text: {overlay_settings['top_text']}")
+        if overlay_settings.get('bottom_text'):
+            print(f"  Bottom text: {overlay_settings['bottom_text']}")
     except Exception as e:
         print(f"✗ Failed to load configuration: {e}")
         return False
@@ -1524,7 +1647,8 @@ def run_short_pipeline(config_path: str) -> bool:
                 input_video,
                 scene_output,
                 scene['start'],
-                scene['end']
+                scene['end'],
+                overlay_settings=overlay_settings
             )
 
             if not success:

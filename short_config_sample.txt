@@ -20,3 +20,20 @@ SCENE3_END=00:02:55
 
 # 出力先
 OUTPUT=data/output/short.mp4
+
+# 上部テキスト（任意）
+TOP_TEXT=ひろゆきが語る\n「仕事と人生」の極意
+TOP_TEXT_SIZE=96
+TOP_TEXT_COLOR=#FFE066
+TOP_TEXT_BOX_COLOR=black@0.75
+TOP_TEXT_WRAP=1
+TOP_TEXT_WRAP_WIDTH=12
+
+# 下部テキスト（任意）
+BOTTOM_TEXT=ニコニコ風コメント付き切り抜きチャンネル\n「ひろゆき視点」
+BOTTOM_TEXT_SIZE=60
+BOTTOM_TEXT_COLOR=white
+BOTTOM_TEXT_BOX_COLOR=black@0.75
+BOTTOM_TEXT_WRAP=1
+BOTTOM_TEXT_WRAP_WIDTH=18
+# BOTTOM_TEXT=👇 コメントや補足もここに表示できます

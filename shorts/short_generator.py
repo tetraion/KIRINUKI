@@ -6,6 +6,7 @@
 import os
 import subprocess
 from pathlib import Path
+from typing import Dict, Optional
 
 
 def parse_time_to_seconds(time_str: str) -> float:
@@ -29,11 +30,84 @@ def parse_time_to_seconds(time_str: str) -> float:
         return float(parts[0])
 
 
+def escape_drawtext_text(text: str) -> str:
+    """
+    drawtextフィルター用に文字列をエスケープ
+    """
+    replacements = {
+        '\\': r'\\\\',
+        ':': r'\:',
+        "'": r"\'",
+        '%': r'\%',
+        '[': r'\[',
+        ']': r'\]'
+    }
+    escaped = text
+    for original, replacement in replacements.items():
+        escaped = escaped.replace(original, replacement)
+    return escaped
+
+
+def escape_filter_expr(expr: str) -> str:
+    """
+    FFmpegフィルター式で区切り文字になり得る記号をエスケープ
+    """
+    replacements = {
+        '\\': r'\\\\',
+        ':': r'\:',
+        ',': r'\,'
+    }
+    escaped = expr
+    for original, replacement in replacements.items():
+        escaped = escaped.replace(original, replacement)
+    return escaped
+
+
+def build_drawtext_filter(
+    text: str,
+    y_expr: str,
+    font: str,
+    fontsize: int,
+    color: str,
+    box: bool,
+    box_color: str,
+    box_border: int,
+    text_align: str = "center"
+) -> str:
+    """
+    drawtextフィルター文字列を構築
+    """
+    parts = [
+        f"text='{escape_drawtext_text(text)}'",
+        "x=(w-text_w)/2",
+        f"y={escape_filter_expr(y_expr)}",
+        f"fontsize={fontsize}",
+        f"fontcolor={color}",
+        f"text_align={text_align}"
+    ]
+
+    if font:
+        # パスが存在する場合はfontfileとして扱う
+        font_path = Path(font)
+        if font_path.exists():
+            parts.append(f"fontfile='{escape_drawtext_text(str(font_path))}'")
+        else:
+            parts.append(f"font='{escape_drawtext_text(font)}'")
+
+    if box:
+        parts.append("box=1")
+        parts.append(f"boxcolor={box_color}")
+        parts.append(f"boxborderw={box_border}")
+
+    return "drawtext=" + ":".join(parts)
+
+
 def generate_short_video(
     input_video: str,
     output_video: str,
     start_time: str,
-    end_time: str
+    end_time: str,
+    overlay_settings: Optional[Dict[str, object]] = None
 ) -> bool:
     """
     final.mp4から時間指定で切り出して縦型ショート動画を生成
@@ -42,13 +116,14 @@ def generate_short_video(
     1. 指定時間で動画を切り出し
     2. 1080x1920の黒背景キャンバスを作成
     3. 元動画を中央に配置（アスペクト比維持）
-    4. 上下の余白は黒背景のまま（後でコメントを入れる予定）
+    4. オプションで上下の余白にテキストを描画
 
     Args:
         input_video: 入力動画ファイルのパス（final.mp4）
         output_video: 出力動画ファイルのパス
         start_time: 開始時刻（hh:mm:ss）
         end_time: 終了時刻（hh:mm:ss）
+        overlay_settings: 上下テキストやスタイル設定
 
     Returns:
         成功した場合True
@@ -92,13 +167,67 @@ def generate_short_video(
         print(f"  3. Add padding: top={pad_top}px, bottom={pad_bottom}px")
         print(f"  4. Final size: 1080x1920")
 
-        # FFmpegで時間切り出し + スケール + パディング
+        # フィルターチェーンを準備
+        filters = [
+            f'scale=1080:{scaled_height}',
+            f'pad=1080:1920:0:{pad_top}:black'
+        ]
+
+        overlay_settings = overlay_settings or {}
+
+        # 上部テキスト
+        top_text = overlay_settings.get('top_text')
+        if top_text:
+            if pad_top > 0:
+                top_y = f"max(20,({pad_top}-text_h)/2)"
+            else:
+                top_y = "20"
+            filters.append(
+                build_drawtext_filter(
+                    text=str(top_text),
+                    y_expr=top_y,
+                    font=str(overlay_settings.get('top_font') or ''),
+                    fontsize=int(overlay_settings.get('top_fontsize', 72)),
+                    color=str(overlay_settings.get('top_color', 'white')),
+                    box=bool(overlay_settings.get('top_box', True)),
+                    box_color=str(overlay_settings.get('top_box_color', 'black@0.6')),
+                    box_border=int(overlay_settings.get('top_box_border', 24)),
+                    text_align="center"
+                )
+            )
+
+        # 下部テキスト
+        bottom_text = overlay_settings.get('bottom_text')
+        if bottom_text:
+            if pad_bottom > 0:
+                base_y = 1920 - pad_bottom
+                bottom_y = f"{base_y}+max(20,({pad_bottom}-text_h)/2)"
+            else:
+                bottom_y = "h-text_h-20"
+
+            filters.append(
+                build_drawtext_filter(
+                    text=str(bottom_text),
+                    y_expr=bottom_y,
+                    font=str(overlay_settings.get('bottom_font') or ''),
+                    fontsize=int(overlay_settings.get('bottom_fontsize', 64)),
+                    color=str(overlay_settings.get('bottom_color', 'white')),
+                    box=bool(overlay_settings.get('bottom_box', True)),
+                    box_color=str(overlay_settings.get('bottom_box_color', 'black@0.6')),
+                    box_border=int(overlay_settings.get('bottom_box_border', 24)),
+                    text_align="center"
+                )
+            )
+
+        filter_chain = ",".join(filters)
+
+        # FFmpegで時間切り出し + スケール + パディング + テキスト描画
         cmd = [
             'ffmpeg', '-y',
             '-ss', start_time,
             '-to', end_time,
             '-i', input_video,
-            '-vf', f'scale=1080:{scaled_height},pad=1080:1920:0:{pad_top}:black',
+            '-vf', filter_chain,
             '-c:v', 'libx264',
             '-preset', 'medium',
             '-crf', '23',

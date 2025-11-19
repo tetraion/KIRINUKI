@@ -24,3 +24,21 @@ SCENE4_END=00:02:12
 
 # 出力先
 OUTPUT=data/output/short.mp4
+
+# 上部テキスト（任意）
+TOP_TEXT=小泉進次郎は超優秀\nトランプと意外な共通点
+TOP_TEXT_SIZE=92
+TOP_TEXT_FONT=Hiragino Sans W8
+TOP_TEXT_COLOR=white
+TOP_TEXT_BOX_COLOR=black@0.75
+TOP_TEXT_WRAP=1
+TOP_TEXT_WRAP_WIDTH=12
+
+# 下部テキスト（任意）
+BOTTOM_TEXT=ニコニコ風コメント付き( ´∀｀)\n元動画は概要欄に！
+BOTTOM_TEXT_SIZE=40
+BOTTOM_TEXT_FONT=Hiragino Sans W6
+BOTTOM_TEXT_COLOR=white
+BOTTOM_TEXT_BOX_COLOR=black@0.75
+BOTTOM_TEXT_WRAP=1
+BOTTOM_TEXT_WRAP_WIDTH=20

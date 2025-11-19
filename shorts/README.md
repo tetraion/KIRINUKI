@@ -6,7 +6,7 @@
 
 - **シンプル**: 時間指定で切り出すだけ
 - **高速**: 複雑な処理なし
-- **柔軟**: 上下の黒背景部分に後からコメントを追加可能
+- **柔軟**: 上下の黒背景部分へタイトルや補足テキストを自動描画可能
 
 ## 使い方
 
@@ -59,6 +59,25 @@ python main.py short short_config.txt
 - 出力動画のパス
 - デフォルト: `data/output/short.mp4`
 
+### TOP_TEXT / BOTTOM_TEXT（任意）
+- 上下の余白に表示するテキスト
+- `\n` で改行可能、もしくは自動折返し（後述）を利用
+- 例: `TOP_TEXT=ひろゆきが語る「仕事\nと人生」の極意`
+- サイズや色は以下のパラメータで調整可能
+
+| パラメータ | 説明 | デフォルト |
+| --- | --- | --- |
+| `TOP_TEXT_SIZE` / `BOTTOM_TEXT_SIZE` | フォントサイズ | 72 / 64 |
+| `TOP_TEXT_COLOR` / `BOTTOM_TEXT_COLOR` | フォントカラー | `white` |
+| `TOP_TEXT_FONT` / `BOTTOM_TEXT_FONT` | フォント名またはフォントファイルパス | システム既定 |
+| `TOP_TEXT_BOX_COLOR` / `BOTTOM_TEXT_BOX_COLOR` | ボックス色（@透明度指定可） | `black@0.65` |
+| `TOP_TEXT_BOX_BORDER` / `BOTTOM_TEXT_BOX_BORDER` | ボックスの上下余白 | 28 |
+| `TOP_TEXT_BOX` / `BOTTOM_TEXT_BOX` | ボックス表示のON/OFF (`1`/`0`) | ON（テキスト指定時） |
+| `TOP_TEXT_WRAP` / `BOTTOM_TEXT_WRAP` | 自動折返しを有効化 (`1`/`0`) | 上：ON / 下：OFF |
+| `TOP_TEXT_WRAP_WIDTH` / `BOTTOM_TEXT_WRAP_WIDTH` | 折返し文字数の目安 | 14 / 20 |
+
+下部テキストを使わない場合は `BOTTOM_TEXT` を空のままにしてください。
+
 ## ワークフロー例
 
 ```bash
@@ -101,7 +120,7 @@ python main.py short short_config.txt
 │  黒背景（下）   │
 └─────────────────┘
 
-※ 上下の黒背景部分は後でコメントを入れる予定
+※ 上下の黒背景部分に設定ファイルで指定したテキストが描画されます
 ```
 
 ## ファイル構成
