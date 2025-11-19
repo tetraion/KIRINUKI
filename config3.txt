@@ -1,0 +1,39 @@
+# KIRINUKI Processor 設定ファイル（3番目のクリップ）
+# key=value 形式で記述してください
+
+# YouTube動画URL（必須）
+VIDEO_URL=https://www.youtube.com/watch?v=9hfmiItOm8w
+
+# 切り抜き開始時刻（必須、hh:mm:ss または mm:ss 形式）
+START_TIME=01:18:00
+
+# 切り抜き終了時刻（任意、hh:mm:ss または mm:ss 形式）
+END_TIME=01:19:30
+
+# 動画タイトル（連結する場合は最初のconfigのみに指定）
+# TITLE=（省略）
+
+# 動画を自動ダウンロード・切り抜きするか（任意、デフォルト: true）
+AUTO_DOWNLOAD=true
+
+# 出力先ディレクトリ（任意、デフォルト: data/output）
+OUTPUT_DIR=data/output
+
+# 一時ファイル用ディレクトリ（任意、デフォルト: data/temp）
+TEMP_DIR=data/temp
+
+# 画面の周囲を上下左右それぞれパーセンテージでクロップ（任意）
+# 動画ごとにクロップ設定が異なる場合は個別に指定してください
+# CROP_PERCENT=0
+# CROP_TOP_PERCENT=0
+# CROP_BOTTOM_PERCENT=0
+# CROP_LEFT_PERCENT=0
+# CROP_RIGHT_PERCENT=0
+
+# ライブチャット表示の遅延（任意、デフォルト: 0、単位: 秒）
+# 動画ごとにディレイが異なる場合は個別に指定してください
+# 例: 10秒遅延している場合 → CHAT_DELAY_SECONDS=10
+CHAT_DELAY_SECONDS=16
+
+# 次の設定ファイル（任意、これが最後のクリップなので指定なし）
+# NEXT_CONFIG=

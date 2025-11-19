@@ -80,12 +80,21 @@
 **処理内容**：
 - START〜ENDの範囲内のチャットメッセージのみ抽出
 - タイムスタンプをSTARTを0秒として調整
+- CHAT_DELAY_SECONDSによる表示タイミング調整（オプション）
 - 読みやすいJSON配列形式に正規化
+
+**チャット表示タイミング調整**：
+- `CHAT_DELAY_SECONDS`：チャット表示のオフセット（秒）
+- 正の値：チャットを早く表示（配信のディレイでチャットが遅れている場合）
+- 負の値：チャットを遅く表示（チャットが早すぎる場合）
+- デフォルト：0（調整なし）
+- 例：`CHAT_DELAY_SECONDS=16` → チャットを16秒早く表示
 
 **入力**：
 - `chat_full.json`（全チャット）
 - START時刻（必須）
 - END時刻（推奨）
+- CHAT_DELAY_SECONDS（任意、デフォルト: 0）
 
 **出力**：
 - `chat_clip.json`（切り抜き区間のチャット）
@@ -236,6 +245,67 @@ ffmpeg -i clip.webm -i logo.png \
 
 ---
 
+## コマンドリファレンス
+
+### メインコマンド
+
+**`run`**：全自動実行（素材準備→動画合成を一括実行）
+```bash
+python main.py run config.txt
+```
+
+**`prepare`**：素材準備のみ（動画ダウンロード、字幕生成、チャット取得まで）
+```bash
+python main.py prepare config.txt
+```
+
+**`compose`**：動画合成のみ（prepareで生成した素材から最終動画を作成）
+```bash
+python main.py compose config.txt
+```
+
+**`output`**：完成動画とconfigをタイトル名のフォルダに保存
+```bash
+python main.py output config.txt
+```
+- 用途：完成した動画を整理保存（config.txtも一緒に保存されるため後から設定を確認可能）
+- 実行内容：`data/output/{TITLE}/` フォルダを作成し、以下をコピー
+  - `final.mp4`
+  - `description.txt`（存在する場合）
+  - `config.txt`
+- 注意：TITLEが設定されていない場合はエラーになります
+
+### 便利コマンド
+
+**`resub`**：字幕のみ再生成（Whisperによる音声認識をやり直す）
+- 用途：Whisper字幕に問題がある場合（文字起こしミス、タイミングずれ等）
+- 実行内容：`subs_clip.srt`と`subs_clip.ass`を再生成
+```bash
+python main.py resub config.txt
+```
+
+**`rechat`**：チャットオーバーレイのみ再生成（チャット表示タイミングを調整）
+- 用途：`CHAT_DELAY_SECONDS`を変更した後、チャットのタイミングだけ再調整したい場合
+- 実行内容：`chat_clip.json`と`chat_overlay.ass`を再生成（元動画やWhisper字幕は再生成しない）
+```bash
+# 1. config.txtのCHAT_DELAY_SECONDSを変更
+# 2. チャットオーバーレイを再生成
+python main.py rechat config.txt
+
+# 3. 動画合成
+python main.py compose config.txt
+```
+
+**`step1.5`**：字幕修正（AI自動補正）- 手動実行のみ
+- 用途：Whisper字幕の誤字脱字、句読点、改行を手動で修正したい場合
+- 実行内容：`subs_clip.srt`をLLMで補正し、`subs_clip_fixed.srt`を生成
+- 注意：このコマンドは自動ワークフロー（prepare/compose）には含まれていません
+```bash
+python main.py step1.5 config.txt
+```
+
+---
+
 ## 推奨ワークフロー
 
 ### 方法1：2段階実行（字幕編集あり）- 推奨
@@ -249,12 +319,51 @@ code data/temp/subs_clip.srt
 
 # 3. 動画合成
 python main.py compose config.txt
+
+# 4. タイトル名のフォルダに保存（任意）
+python main.py output config.txt
 ```
 
 ### 方法2：全自動実行（字幕編集なし）
 
 ```bash
 python main.py run config.txt
+
+# タイトル名のフォルダに保存（任意）
+python main.py output config.txt
+```
+
+### 方法3：チャットタイミング調整
+
+```bash
+# 1. 素材準備
+python main.py prepare config.txt
+
+# 2. 動画合成（チャットタイミングが合わない場合）
+python main.py compose config.txt
+
+# 3. config.txtのCHAT_DELAY_SECONDSを調整（例: 16秒早くしたい → 16）
+code config.txt
+
+# 4. チャットオーバーレイのみ再生成
+python main.py rechat config.txt
+
+# 5. 動画合成
+python main.py compose config.txt
+
+# 6. タイトル名のフォルダに保存（任意）
+python main.py output config.txt
+```
+
+### 方法4：Whisper字幕再生成
+
+```bash
+# Whisper字幕に問題がある場合
+python main.py resub config.txt
+python main.py compose config.txt
+
+# タイトル名のフォルダに保存（任意）
+python main.py output config.txt
 ```
 
 ---
@@ -332,6 +441,21 @@ AUTO_DOWNLOAD=false
 WEBM_PATH=data/input/clip.webm
 ```
 
+### チャット表示タイミング調整
+
+```
+# チャットが遅れている場合（配信のディレイ）
+CHAT_DELAY_SECONDS=16  # チャットを16秒早く表示
+
+# チャットが早すぎる場合
+CHAT_DELAY_SECONDS=-10  # チャットを10秒遅く表示
+```
+
+**注意**：
+- 配信のディレイでチャットが映像より遅れている場合、正の値を指定してチャットを早く表示します
+- チャットが映像より早すぎる場合、負の値を指定してチャットを遅く表示します
+- デフォルト：0（調整なし）
+
 ### 完全な設定例
 
 ```
@@ -341,6 +465,7 @@ END_TIME=00:10:45
 TITLE=ヤマトがベトナム人運転手500人採用
 AUTO_DOWNLOAD=true
 CROP_PERCENT=5.0
+CHAT_DELAY_SECONDS=16
 OUTPUT_DIR=data/output
 TEMP_DIR=data/temp
 ```
@@ -387,6 +512,19 @@ TEMP_DIR=data/temp
 ---
 
 ## 変更履歴
+
+- **2025-11-18**：チャット表示タイミング調整機能とクイックコマンド追加
+  - チャット表示タイミング調整機能を追加（`CHAT_DELAY_SECONDS`設定）
+    - 正の値でチャットを早く表示（配信ディレイ対応）
+    - 負の値でチャットを遅く表示（チャット先行対応）
+  - 字幕再生成コマンド追加（`resub`）
+    - Whisper字幕のみ再生成（文字起こしミス修正用）
+  - チャットオーバーレイ再生成コマンド追加（`rechat`）
+    - チャットタイミング調整後の再生成用
+  - チャット冒頭10秒非表示のハードコード削除
+    - 切り抜き冒頭からチャットを表示可能に
+  - Step 1.5（字幕AI補正）をワークフローから除外
+    - 手動実行のみに変更（`python main.py step1.5`）
 
 - **2025-11-17**：AI生成機能の追加
   - YouTube説明欄自動生成機能を追加（`step7_generate_description.py`）
