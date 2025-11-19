@@ -45,6 +45,9 @@ import re
 import glob
 import shutil
 
+# ショート動画生成モジュール（独立モジュール）
+from shorts import generate_short_video
+
 
 def concatenate_videos(video_paths: list, output_path: str) -> bool:
     """
@@ -1390,6 +1393,181 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
     return True
 
 
+def load_short_config(config_path: str) -> dict:
+    """
+    ショート動画設定ファイルを読み込む
+
+    複数シーン対応：
+    SCENE1_START, SCENE1_END, SCENE2_START, SCENE2_END... の形式で記述可能
+
+    Args:
+        config_path: 設定ファイルのパス
+
+    Returns:
+        設定辞書（scenesキーに複数シーンのリストを含む）
+    """
+    config = {
+        'INPUT_VIDEO': 'data/output/final.mp4',
+        'OUTPUT': 'data/output/short.mp4',
+        'scenes': []  # 複数シーンを格納
+    }
+
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
+    scene_data = {}  # SCENE1_START, SCENE1_END などを一時保存
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+
+                # SCENEn_START, SCENEn_END を検出
+                if key.startswith('SCENE') and ('_START' in key or '_END' in key):
+                    scene_data[key] = value
+                else:
+                    config[key] = value
+
+    # シーンデータを整理
+    if scene_data:
+        # SCENEの番号を抽出してソート
+        scene_numbers = set()
+        for key in scene_data.keys():
+            # SCENE1_START → 1 を抽出
+            match = re.match(r'SCENE(\d+)_', key)
+            if match:
+                scene_numbers.add(int(match.group(1)))
+
+        # 番号順にシーンを構築
+        for num in sorted(scene_numbers):
+            start_key = f'SCENE{num}_START'
+            end_key = f'SCENE{num}_END'
+
+            if start_key in scene_data and end_key in scene_data:
+                config['scenes'].append({
+                    'start': scene_data[start_key],
+                    'end': scene_data[end_key]
+                })
+    else:
+        # 従来の形式（START_TIME, END_TIME）もサポート
+        if 'START_TIME' in config and 'END_TIME' in config:
+            config['scenes'].append({
+                'start': config['START_TIME'],
+                'end': config['END_TIME']
+            })
+
+    return config
+
+
+def run_short_pipeline(config_path: str) -> bool:
+    """
+    ショート動画生成パイプライン（複数シーン対応）
+
+    Args:
+        config_path: 設定ファイルのパス
+
+    Returns:
+        成功した場合True
+    """
+    print("=" * 60)
+    print("KIRINUKI PROCESSOR - SHORT VIDEO GENERATOR")
+    print("=" * 60)
+
+    # 設定読み込み
+    try:
+        config = load_short_config(config_path)
+        print(f"\n✓ Configuration loaded: {config_path}")
+        print(f"  Input video: {config['INPUT_VIDEO']}")
+        print(f"  Scenes: {len(config['scenes'])}")
+        for i, scene in enumerate(config['scenes'], 1):
+            print(f"    Scene {i}: {scene['start']} - {scene['end']}")
+        print(f"  Output: {config['OUTPUT']}")
+    except Exception as e:
+        print(f"✗ Failed to load configuration: {e}")
+        return False
+
+    # シーンが定義されているか確認
+    if not config['scenes']:
+        print(f"\n✗ Error: No scenes defined in configuration")
+        print(f"  Please define SCENE1_START, SCENE1_END, etc. in {config_path}")
+        return False
+
+    # 入力動画の存在確認
+    input_video = config['INPUT_VIDEO']
+    if not os.path.exists(input_video):
+        print(f"\n✗ Error: Input video not found: {input_video}")
+        print(f"  Please run 'python main.py compose config.txt' first to create final.mp4")
+        return False
+
+    # 出力ディレクトリを作成
+    output_path = config['OUTPUT']
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    # 一時ディレクトリを作成
+    temp_dir = 'data/temp'
+    os.makedirs(temp_dir, exist_ok=True)
+
+    # 各シーンを個別に生成
+    scene_files = []
+    try:
+        for i, scene in enumerate(config['scenes'], 1):
+            scene_output = os.path.join(temp_dir, f'short_scene_{i}.mp4')
+            print(f"\n[Scene {i}/{len(config['scenes'])}] Generating: {scene['start']} - {scene['end']}")
+
+            success = generate_short_video(
+                input_video,
+                scene_output,
+                scene['start'],
+                scene['end']
+            )
+
+            if not success:
+                print(f"✗ Failed to generate scene {i}")
+                return False
+
+            scene_files.append(scene_output)
+
+        # 複数シーンを連結
+        if len(scene_files) == 1:
+            # シーンが1つだけの場合はそのままコピー
+            shutil.copy2(scene_files[0], output_path)
+            print(f"\n✓ Short video created: {output_path}")
+        else:
+            # 複数シーンを連結
+            print(f"\n[Concatenating {len(scene_files)} scenes...]")
+            success = concatenate_videos(scene_files, output_path)
+            if not success:
+                print("✗ Failed to concatenate scenes")
+                return False
+            print(f"✓ Scenes concatenated: {output_path}")
+
+    except Exception as e:
+        print(f"✗ Error generating short video: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        # 一時ファイルを削除
+        for scene_file in scene_files:
+            if os.path.exists(scene_file):
+                os.remove(scene_file)
+
+    print("\n" + "=" * 60)
+    print("✓ SHORT VIDEO GENERATION COMPLETED!")
+    print("=" * 60)
+    print(f"\nOutput: {output_path}")
+    print(f"Total scenes: {len(config['scenes'])}")
+    print()
+
+    return True
+
+
 def run_single_step(step_num: float, args: argparse.Namespace) -> bool:
     """
     単一ステップを実行
@@ -1547,6 +1725,10 @@ def main():
         help="Output path for sample config (default: config.txt)"
     )
 
+    # ショート動画生成パイプライン
+    short_parser = subparsers.add_parser("short", help="Generate vertical short video from clip.webm or concatenated.webm")
+    short_parser.add_argument("config", help="Short config file path (e.g., short_config.txt)")
+
     # 個別ステップ実行用のサブコマンド
     # Step 0
     step0_parser = subparsers.add_parser("step0", help="Download and clip video")
@@ -1642,6 +1824,10 @@ def main():
         elif args.command == "init":
             create_sample_config(args.output)
             return 0
+
+        elif args.command == "short":
+            success = run_short_pipeline(args.config)
+            return 0 if success else 1
 
         elif args.command.startswith("step"):
             step_str = args.command[4:]

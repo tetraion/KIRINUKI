@@ -1,0 +1,26 @@
+# Short Video Configuration - Multiple Scenes Support
+
+# 入力動画（final.mp4）
+INPUT_VIDEO=data/output/final.mp4
+
+# 複数シーンの定義
+# SCENE1, SCENE2, SCENE3... の順に連結されます
+
+# シーン1
+SCENE1_START=00:00:00
+SCENE1_END=00:00:14.5
+
+# シーン2
+SCENE2_START=00:00:55
+SCENE2_END=00:00:57.8
+
+# シーン3
+SCENE3_START=00:01:09.5
+SCENE3_END=00:01:37
+
+# シーン4
+SCENE4_START=00:02:05
+SCENE4_END=00:02:12
+
+# 出力先
+OUTPUT=data/output/short.mp4
