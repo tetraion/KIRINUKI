@@ -10,6 +10,18 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
 from kirinuki_processor.utils.time_utils import ass_time_format
+from kirinuki_processor.constants import (
+    CHAT_LANE_COUNT,
+    CHAT_LANE_TOP,
+    CHAT_LANE_SPACING,
+    CHAT_LANE_GAP,
+    CHAT_COMMENT_SPEED,
+    CHAT_HORIZONTAL_MARGIN,
+    CHAT_MIN_COMMENT_WIDTH,
+    CHAT_FONT_NAME,
+    CHAT_FONT_SIZE,
+    CHAT_OUTLINE_WIDTH
+)
 
 
 @dataclass
@@ -20,22 +32,22 @@ class OverlayConfig:
     video_height: int = 1080
 
     # ニコ動風の横スクロールコメント設定
-    lane_count: int = 6
-    lane_top: int = 260  # タイトルバーと被らない開始位置
-    lane_spacing: int = 70  # 各レーンの縦間隔（下部字幕を避ける）
-    lane_gap: float = 0.25  # 同じレーンに再利用する際の余白秒数
+    lane_count: int = CHAT_LANE_COUNT
+    lane_top: int = CHAT_LANE_TOP
+    lane_spacing: int = CHAT_LANE_SPACING
+    lane_gap: float = CHAT_LANE_GAP
 
     # タイムオフセット
     visible_start_offset: float = 0.0  # 切り抜き冒頭から表示
 
     # 移動パラメータ
-    comment_speed: float = 380.0  # ピクセル/秒
-    horizontal_margin: int = 80  # 画面右端からの開始オフセット
-    min_comment_width: int = 320  # コメント幅の最低値（px）
+    comment_speed: float = CHAT_COMMENT_SPEED
+    horizontal_margin: int = CHAT_HORIZONTAL_MARGIN
+    min_comment_width: int = CHAT_MIN_COMMENT_WIDTH
 
     # フォント設定
-    font_name: str = "Hiragino Sans"
-    font_size: int = 55  # 字幕（110px）の50%
+    font_name: str = CHAT_FONT_NAME
+    font_size: int = CHAT_FONT_SIZE
 
     # 色設定（ASS形式: &HAABBGGRR）
     text_color: str = "&H00FFFFFF"  # 白
@@ -46,7 +58,7 @@ class OverlayConfig:
     max_visible_messages: int = 7  # 互換用（未使用）
 
     # スタイル設定
-    outline_width: int = 3
+    outline_width: int = CHAT_OUTLINE_WIDTH
     shadow_depth: int = 2
     margin_v: int = 10  # 垂直マージン
     margin_r: int = 20  # 右マージン

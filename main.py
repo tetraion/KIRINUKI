@@ -34,33 +34,16 @@ from kirinuki_processor.steps.step5_generate_overlay import (
 from kirinuki_processor.steps.step6_compose_video import compose_video
 from kirinuki_processor.steps.step_title_bar import generate_title_bar
 from kirinuki_processor.steps.step7_generate_description import generate_youtube_description
+from kirinuki_processor.utils.video_utils import get_video_duration
+from kirinuki_processor.constants import (
+    DEFAULT_CROP_CRF,
+    DEFAULT_CROP_BITRATE,
+    DEFAULT_VIDEO_DURATION_FALLBACK
+)
 import subprocess
 import re
-
-
-def get_video_duration(video_path: str) -> float:
-    """
-    動画の長さを取得（秒）
-
-    Args:
-        video_path: 動画ファイルのパス
-
-    Returns:
-        動画の長さ（秒）
-    """
-    try:
-        cmd = [
-            'ffprobe',
-            '-v', 'error',
-            '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            video_path
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return float(result.stdout.strip())
-    except Exception as e:
-        print(f"Warning: Failed to get video duration for {video_path}: {e}")
-        return 0.0
+import glob
+import shutil
 
 
 def concatenate_videos(video_paths: list, output_path: str) -> bool:
@@ -76,7 +59,6 @@ def concatenate_videos(video_paths: list, output_path: str) -> bool:
     """
     if len(video_paths) == 1:
         # 1つだけの場合はコピー
-        import shutil
         shutil.copy2(video_paths[0], output_path)
         return True
 
@@ -171,8 +153,8 @@ def merge_subtitle_files(subtitle_paths: list, output_path: str) -> bool:
                 time_offset += duration
             else:
                 print(f"Warning: Could not find video file for subtitle: {video_path}")
-                # デフォルトで90秒を仮定（エラー回避のため）
-                time_offset += 90
+                # デフォルト値を使用（動画長さ取得失敗時のフォールバック）
+                time_offset += DEFAULT_VIDEO_DURATION_FALLBACK
 
         # マージした字幕をファイルに書き込み
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -382,8 +364,8 @@ def crop_video(input_path: str, output_path: str, crop_top: float, crop_bottom: 
             '-i', input_path,
             '-vf', f'crop={crop_w}:{crop_h}:{crop_x}:{crop_y}',
             '-c:v', 'libvpx-vp9',
-            '-crf', '30',
-            '-b:v', '0',
+            '-crf', str(DEFAULT_CROP_CRF),
+            '-b:v', str(DEFAULT_CROP_BITRATE),
             '-c:a', 'copy',
             output_path
         ]
@@ -394,8 +376,14 @@ def crop_video(input_path: str, output_path: str, crop_top: float, crop_bottom: 
             return False
 
         return True
+    except subprocess.CalledProcessError as e:
+        print(f"FFmpeg error cropping video: {e.stderr}")
+        return False
+    except FileNotFoundError:
+        print(f"Error: Input file not found: {input_path}")
+        return False
     except Exception as e:
-        print(f"Error cropping video: {e}")
+        print(f"Unexpected error cropping video: {e}")
         return False
 
 
@@ -472,7 +460,6 @@ def process_single_clip(config: Any, clip_index: int) -> tuple:
         print(f"✓ Video cropped successfully")
     else:
         # クロップ不要の場合はコピー
-        import shutil
         shutil.copy2(raw_video_path, clip_video_path)
         video_source_path = clip_video_path
 
@@ -852,7 +839,6 @@ def run_clear_pipeline(config_path: str, keep_videos: bool = False) -> bool:
         ])
 
     deleted_count = 0
-    import glob
 
     for pattern in patterns_to_delete:
         full_pattern = os.path.join(config.temp_dir, pattern)
@@ -925,9 +911,6 @@ def run_output_pipeline(config_path: str) -> bool:
     # フォルダ作成
     os.makedirs(output_folder, exist_ok=True)
     print(f"✓ Created output folder: {output_folder}")
-
-    # ファイルをコピー
-    import shutil
 
     # 1. final.mp4をコピー
     dest_mp4 = os.path.join(output_folder, "final.mp4")

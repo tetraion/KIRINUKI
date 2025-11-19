@@ -6,6 +6,14 @@
 
 from typing import Optional
 from kirinuki_processor.utils.time_utils import ass_time_format
+from kirinuki_processor.constants import (
+    TITLE_BAR_HEIGHT,
+    TITLE_BAR_MARGIN_TOP,
+    TITLE_BAR_BG_COLOR,
+    TITLE_BAR_FONT_SIZE,
+    TITLE_BAR_FONT_NAME,
+    LOGO_HEIGHT
+)
 
 
 def generate_title_bar(
@@ -15,8 +23,7 @@ def generate_title_bar(
     video_height: int = 1080,
     slide_duration: float = 1.2,
     display_duration: float = None,  # Noneの場合は動画終了まで表示
-    channel_name: str = "ひろゆき視点",  # チャンネル名
-    logo_height: int = 180  # ロゴの高さ（step6_compose_video.pyと同期）
+    channel_name: str = "ひろゆき視点"  # チャンネル名
 ) -> bool:
     """
     タイトルバーのASS字幕ファイルを生成
@@ -32,22 +39,21 @@ def generate_title_bar(
     Returns:
         bool: 生成に成功したかどうか
     """
-    # タイトルバーの設定
-    bar_height = 120
-    bar_y_position = 10  # ロゴの頂点に合わせる
+    # タイトルバーの設定（constants.pyから取得）
+    bar_height = TITLE_BAR_HEIGHT
+    bar_y_position = TITLE_BAR_MARGIN_TOP
 
     # フォント設定
-    font_name = "Hiragino Sans"
+    font_name = TITLE_BAR_FONT_NAME
     # チャンネル名はより視認性の高い太字フォントとする
     channel_font_name = "Hiragino Sans W9"
-    font_size = 90  # 65→90に拡大
+    font_size = TITLE_BAR_FONT_SIZE
 
     # 色設定（ASS形式: &HAABBGGRR、BGRの順）
     text_color = "&H00000000"  # 黒（黄色背景に対して）
     outline_color = "&H00FFFFFF"  # 白アウトライン
     channel_outline_color = "&H00404040"  # チャンネル名は濃いめの縁取りで視認性アップ
-    # 黄色 RGB(255, 229, 0) → BGR(0, 229, 255) = 00E5FF
-    bar_bg_color = "&H0000E5FF"  # 黄色（完全不透明、AA=00）
+    bar_bg_color = TITLE_BAR_BG_COLOR  # 黄色（constants.pyから取得）
     # 青色 RGB(0, 120, 215) → BGR(215, 120, 0) = D77800
     channel_bg_color = "&H00D77800"  # 青色（完全不透明、AA=00）
 
@@ -123,10 +129,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(f"Dialogue: 1,{ass_time_format(slide_end)},{ass_time_format(total_end)},TitleText,,0,0,0,,{{\\an4\\pos({text_end_x},{text_y})}}{title_escaped}\\N\n")
 
         # Layer 2: チャンネル名背景と文字（タイトルバー下、ロゴとの差分空間に表示）
-        # タイトルバー下端: bar_y_position + bar_height = 10 + 120 = 130
-        # ロゴ下端: bar_y_position + logo_height = 10 + 180 = 190
+        # タイトルバー下端: bar_y_position + bar_height
+        # ロゴ下端: bar_y_position + LOGO_HEIGHT
         # チャンネル名のY位置: タイトルバー下端とロゴ下端の中間
-        channel_area_height = logo_height - bar_height  # 60px
+        channel_area_height = LOGO_HEIGHT - bar_height
         channel_y_top = bar_y_position + bar_height  # 130
         channel_y = channel_y_top + channel_area_height // 2  # 160
 

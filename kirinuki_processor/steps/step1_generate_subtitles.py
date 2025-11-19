@@ -12,6 +12,15 @@ from pathlib import Path
 from typing import Optional
 import whisper
 
+from kirinuki_processor.constants import (
+    SUBTITLE_FONT_NAME,
+    SUBTITLE_FONT_SIZE,
+    SUBTITLE_OUTLINE_WIDTH,
+    SUBTITLE_SHADOW_OFFSET,
+    SUBTITLE_BOTTOM_MARGIN,
+    SUBTITLE_LINE_BREAK_THRESHOLD
+)
+
 
 def extract_audio_from_video(video_path: str, audio_path: str) -> bool:
     """
@@ -172,7 +181,7 @@ def generate_ass_from_segments(segments: list, output_path: str) -> None:
         output_path: 出力するASSファイルのパス
     """
     # ASSヘッダー
-    header = """[Script Info]
+    header = f"""[Script Info]
 Title: Whisper Subtitles
 ScriptType: v4.00+
 WrapStyle: 2
@@ -182,7 +191,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Hiragino Sans,110,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,4,2,50,50,40,1
+Style: Default,{SUBTITLE_FONT_NAME},{SUBTITLE_FONT_SIZE},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,{SUBTITLE_OUTLINE_WIDTH},{SUBTITLE_SHADOW_OFFSET},2,50,50,{SUBTITLE_BOTTOM_MARGIN},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -199,8 +208,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             # エスケープ処理（先に実行）
             text_escaped = text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
 
-            # 長い文を自動改行（約20文字で改行）
-            if len(text) > 20:
+            # 長い文を自動改行
+            if len(text) > SUBTITLE_LINE_BREAK_THRESHOLD:
                 # 文の中間あたりで改行（句読点を優先）
                 mid = len(text) // 2
                 # 句読点を探す
