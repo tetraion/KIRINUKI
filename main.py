@@ -1411,7 +1411,9 @@ SHORT_OVERLAY_DEFAULTS = {
     'TOP_TEXT_WRAP': '1',
     'BOTTOM_TEXT_WRAP': '0',
     'TOP_TEXT_WRAP_WIDTH': '14',
-    'BOTTOM_TEXT_WRAP_WIDTH': '20'
+    'BOTTOM_TEXT_WRAP_WIDTH': '20',
+    'TOP_TEXT_OFFSET_Y': '0',
+    'BOTTOM_TEXT_OFFSET_Y': '0'
 }
 
 
@@ -1564,7 +1566,9 @@ def build_overlay_settings(config: dict) -> dict:
         'top_wrap': _parse_bool_value(config.get('TOP_TEXT_WRAP'), True),
         'bottom_wrap': _parse_bool_value(config.get('BOTTOM_TEXT_WRAP'), False),
         'top_wrap_chars': _parse_int_value(config.get('TOP_TEXT_WRAP_WIDTH'), 14),
-        'bottom_wrap_chars': _parse_int_value(config.get('BOTTOM_TEXT_WRAP_WIDTH'), 20)
+        'bottom_wrap_chars': _parse_int_value(config.get('BOTTOM_TEXT_WRAP_WIDTH'), 20),
+        'top_offset_y': _parse_int_value(config.get('TOP_TEXT_OFFSET_Y'), 0),
+        'bottom_offset_y': _parse_int_value(config.get('BOTTOM_TEXT_OFFSET_Y'), 0)
     }
     overlay['top_box'] = _parse_bool_value(
         config.get('TOP_TEXT_BOX'),

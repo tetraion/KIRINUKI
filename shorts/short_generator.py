@@ -182,6 +182,9 @@ def generate_short_video(
                 top_y = f"max(20,({pad_top}-text_h)/2)"
             else:
                 top_y = "20"
+            top_offset = int(overlay_settings.get('top_offset_y', 0))
+            if top_offset:
+                top_y = f"({top_y})-({top_offset})"
             filters.append(
                 build_drawtext_filter(
                     text=str(top_text),
@@ -204,6 +207,9 @@ def generate_short_video(
                 bottom_y = f"{base_y}+max(20,({pad_bottom}-text_h)/2)"
             else:
                 bottom_y = "h-text_h-20"
+            bottom_offset = int(overlay_settings.get('bottom_offset_y', 0))
+            if bottom_offset:
+                bottom_y = f"({bottom_y})-({bottom_offset})"
 
             filters.append(
                 build_drawtext_filter(
