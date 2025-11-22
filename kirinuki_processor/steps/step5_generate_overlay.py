@@ -38,7 +38,7 @@ class OverlayConfig:
     lane_gap: float = CHAT_LANE_GAP
 
     # タイムオフセット
-    visible_start_offset: float = 0.0  # 切り抜き冒頭から表示
+    visible_start_offset: float = 5.0  # 切り抜き冒頭から表示
 
     # 移動パラメータ
     comment_speed: float = CHAT_COMMENT_SPEED

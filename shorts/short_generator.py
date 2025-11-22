@@ -185,19 +185,34 @@ def generate_short_video(
             top_offset = int(overlay_settings.get('top_offset_y', 0))
             if top_offset:
                 top_y = f"({top_y})-({top_offset})"
-            filters.append(
-                build_drawtext_filter(
-                    text=str(top_text),
-                    y_expr=top_y,
-                    font=str(overlay_settings.get('top_font') or ''),
-                    fontsize=int(overlay_settings.get('top_fontsize', 72)),
-                    color=str(overlay_settings.get('top_color', 'white')),
-                    box=bool(overlay_settings.get('top_box', True)),
-                    box_color=str(overlay_settings.get('top_box_color', 'black@0.6')),
-                    box_border=int(overlay_settings.get('top_box_border', 24)),
-                    text_align="center"
+            top_lines = overlay_settings.get('top_lines') or str(top_text).split('\n')
+            top_line_colors = overlay_settings.get('top_line_colors', {})
+            line_spacing = max(6, int(int(overlay_settings.get('top_fontsize', 72)) * 0.15))
+            box_border = int(overlay_settings.get('top_box_border', 24))
+            line_height = int(overlay_settings.get('top_fontsize', 72)) + line_spacing + (box_border * 2)
+            total_offset = ((len(top_lines) - 1) * line_height) / 2 if top_lines else 0
+            for idx, line_text in enumerate(top_lines):
+                line_color = top_line_colors.get(idx + 1, str(overlay_settings.get('top_color', 'white')))
+                line_y_expr = top_y
+                if len(top_lines) > 1:
+                    shift = -total_offset + idx * line_height
+                    if shift:
+                        line_y_expr = f"({top_y})+({shift})"
+                if not line_text:
+                    continue
+                filters.append(
+                    build_drawtext_filter(
+                        text=str(line_text),
+                        y_expr=line_y_expr,
+                        font=str(overlay_settings.get('top_font') or ''),
+                        fontsize=int(overlay_settings.get('top_fontsize', 72)),
+                        color=line_color,
+                        box=bool(overlay_settings.get('top_box', True)),
+                        box_color=str(overlay_settings.get('top_box_color', 'black@0.6')),
+                        box_border=box_border,
+                        text_align="center"
+                    )
                 )
-            )
 
         # 下部テキスト
         bottom_text = overlay_settings.get('bottom_text')
@@ -211,19 +226,36 @@ def generate_short_video(
             if bottom_offset:
                 bottom_y = f"({bottom_y})-({bottom_offset})"
 
-            filters.append(
-                build_drawtext_filter(
-                    text=str(bottom_text),
-                    y_expr=bottom_y,
-                    font=str(overlay_settings.get('bottom_font') or ''),
-                    fontsize=int(overlay_settings.get('bottom_fontsize', 64)),
-                    color=str(overlay_settings.get('bottom_color', 'white')),
-                    box=bool(overlay_settings.get('bottom_box', True)),
-                    box_color=str(overlay_settings.get('bottom_box_color', 'black@0.6')),
-                    box_border=int(overlay_settings.get('bottom_box_border', 24)),
-                    text_align="center"
+            bottom_lines = overlay_settings.get('bottom_lines') or str(bottom_text).split('\n')
+            bottom_line_colors = overlay_settings.get('bottom_line_colors', {})
+            bottom_fontsize = int(overlay_settings.get('bottom_fontsize', 64))
+            bottom_line_spacing = max(6, int(bottom_fontsize * 0.15))
+            bottom_box_border = int(overlay_settings.get('bottom_box_border', 24))
+            bottom_line_height = bottom_fontsize + bottom_line_spacing + (bottom_box_border * 2)
+            bottom_total_offset = ((len(bottom_lines) - 1) * bottom_line_height) / 2 if bottom_lines else 0
+
+            for idx, line_text in enumerate(bottom_lines):
+                line_color = bottom_line_colors.get(idx + 1, str(overlay_settings.get('bottom_color', 'white')))
+                line_y_expr = bottom_y
+                if len(bottom_lines) > 1:
+                    shift = -bottom_total_offset + idx * bottom_line_height
+                    if shift:
+                        line_y_expr = f"({bottom_y})+({shift})"
+                if not line_text:
+                    continue
+                filters.append(
+                    build_drawtext_filter(
+                        text=str(line_text),
+                        y_expr=line_y_expr,
+                        font=str(overlay_settings.get('bottom_font') or ''),
+                        fontsize=bottom_fontsize,
+                        color=line_color,
+                        box=bool(overlay_settings.get('bottom_box', True)),
+                        box_color=str(overlay_settings.get('bottom_box_color', 'black@0.6')),
+                        box_border=bottom_box_border,
+                        text_align="center"
+                    )
                 )
-            )
 
         filter_chain = ",".join(filters)
 

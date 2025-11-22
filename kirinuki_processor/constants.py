@@ -92,7 +92,7 @@ CHAT_MIN_COMMENT_WIDTH = 320
 CHAT_FONT_NAME = "Hiragino Sans"
 
 # コメントのフォントサイズ
-CHAT_FONT_SIZE = 55
+CHAT_FONT_SIZE = 60
 
 # コメントの縁取り幅
 CHAT_OUTLINE_WIDTH = 3

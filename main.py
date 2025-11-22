@@ -1584,6 +1584,23 @@ def build_overlay_settings(config: dict) -> dict:
     if overlay['bottom_wrap'] and overlay['bottom_text']:
         overlay['bottom_text'] = _auto_wrap_text(overlay['bottom_text'], overlay['bottom_wrap_chars'])
 
+    overlay['top_lines'] = overlay['top_text'].split('\n') if overlay['top_text'] else []
+    overlay['bottom_lines'] = overlay['bottom_text'].split('\n') if overlay['bottom_text'] else []
+
+    overlay['top_line_colors'] = {}
+    for idx, _ in enumerate(overlay['top_lines'], start=1):
+        key = f'TOP_TEXT_LINE{idx}_COLOR'
+        color = _clean_str_value(config.get(key))
+        if color:
+            overlay['top_line_colors'][idx] = color
+
+    overlay['bottom_line_colors'] = {}
+    for idx, _ in enumerate(overlay['bottom_lines'], start=1):
+        key = f'BOTTOM_TEXT_LINE{idx}_COLOR'
+        color = _clean_str_value(config.get(key))
+        if color:
+            overlay['bottom_line_colors'][idx] = color
+
     return overlay
 
 

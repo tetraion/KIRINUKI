@@ -76,6 +76,7 @@ python main.py short short_config.txt
 | `TOP_TEXT_WRAP` / `BOTTOM_TEXT_WRAP` | 自動折返しを有効化 (`1`/`0`) | 上：ON / 下：OFF |
 | `TOP_TEXT_WRAP_WIDTH` / `BOTTOM_TEXT_WRAP_WIDTH` | 折返し文字数の目安 | 14 / 20 |
 | `TOP_TEXT_OFFSET_Y` / `BOTTOM_TEXT_OFFSET_Y` | 上下移動量（正の値で上方向へシフト、ピクセル） | 0 |
+| `TOP_TEXT_LINE{n}_COLOR` / `BOTTOM_TEXT_LINE{n}_COLOR` | n行目だけ別色にする | 省略時は全行 `*_TEXT_COLOR` を使用 |
 
 下部テキストを使わない場合は `BOTTOM_TEXT` を空のままにしてください。
 
