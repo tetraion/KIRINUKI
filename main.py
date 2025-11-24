@@ -1083,8 +1083,13 @@ def run_compose_pipeline(config_path: str) -> bool:
             subs_clip_path_ass = os.path.join(base_config.temp_dir, "subs_clip.ass")
 
         try:
-            needs_regen = (not os.path.exists(subs_clip_path_ass) or
-                           os.path.getmtime(subs_clip_path_ass) < os.path.getmtime(subs_clip_path_srt))
+            bold_variant = subs_clip_path_ass.replace(".ass", "_bold.ass")
+            needs_regen = (
+                not os.path.exists(subs_clip_path_ass)
+                or (base_config.subtitle_style == "bold" and not os.path.exists(bold_variant))
+                or os.path.getmtime(subs_clip_path_ass) < os.path.getmtime(subs_clip_path_srt)
+                or (os.path.exists(bold_variant) and os.path.getmtime(bold_variant) < os.path.getmtime(subs_clip_path_srt))
+            )
             if needs_regen:
                 print("  Updating styled subtitles from edited SRT...")
                 convert_srt_to_ass(subs_clip_path_srt, subs_clip_path_ass)
@@ -1092,8 +1097,13 @@ def run_compose_pipeline(config_path: str) -> bool:
             print(f"  Warning: Failed to regenerate ASS from SRT: {e}")
 
     if subs_clip_path_ass and os.path.exists(subs_clip_path_ass):
-        subtitle_path = subs_clip_path_ass
-        print(f"  Subtitles: {subs_clip_path_ass} (styled)")
+        subtitle_candidate = subs_clip_path_ass
+        if base_config.subtitle_style == "bold":
+            bold_path = subs_clip_path_ass.replace(".ass", "_bold.ass")
+            if os.path.exists(bold_path):
+                subtitle_candidate = bold_path
+        subtitle_path = subtitle_candidate
+        print(f"  Subtitles: {subtitle_path} (styled)")
     elif subs_clip_path_srt and os.path.exists(subs_clip_path_srt):
         subtitle_path = subs_clip_path_srt
         print(f"  Subtitles: {subs_clip_path_srt}")

@@ -17,6 +17,11 @@ from kirinuki_processor.constants import (
     SUBTITLE_FONT_SIZE,
     SUBTITLE_OUTLINE_WIDTH,
     SUBTITLE_SHADOW_OFFSET,
+    SUBTITLE_BOLD_FONT_SIZE,
+    SUBTITLE_BOLD_OUTLINE_WIDTH,
+    SUBTITLE_BOLD_SHADOW_OFFSET,
+    SUBTITLE_BOLD_OUTLINE_COLOR,
+    SUBTITLE_BOLD_BOTTOM_MARGIN,
     SUBTITLE_BOTTOM_MARGIN,
     SUBTITLE_LINE_BREAK_THRESHOLD
 )
@@ -128,6 +133,18 @@ def convert_srt_to_ass(input_srt: str, output_ass: str) -> None:
         raise ValueError("No subtitle entries found in SRT")
 
     generate_ass_from_segments(segments, output_ass)
+    # 併せて強調版（大・太・紺縁）も出力しておく
+    alt_output_ass = output_ass.replace(".ass", "_bold.ass")
+    generate_ass_from_segments_with_style(
+        segments,
+        alt_output_ass,
+        font_name=SUBTITLE_FONT_NAME,
+        font_size=SUBTITLE_BOLD_FONT_SIZE,
+        outline_width=SUBTITLE_BOLD_OUTLINE_WIDTH,
+        shadow_offset=SUBTITLE_BOLD_SHADOW_OFFSET,
+        outline_color=SUBTITLE_BOLD_OUTLINE_COLOR,
+        bottom_margin=SUBTITLE_BOLD_BOTTOM_MARGIN
+    )
 
 
 def _parse_srt_block(lines: list) -> Optional[dict]:
@@ -180,22 +197,14 @@ def generate_ass_from_segments(segments: list, output_path: str) -> None:
         segments: Whisperの文字起こし結果のセグメントリスト
         output_path: 出力するASSファイルのパス
     """
-    # ASSヘッダー
-    header = f"""[Script Info]
-Title: Whisper Subtitles
-ScriptType: v4.00+
-WrapStyle: 2
-PlayResX: 1920
-PlayResY: 1080
-ScaledBorderAndShadow: yes
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{SUBTITLE_FONT_NAME},{SUBTITLE_FONT_SIZE},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,{SUBTITLE_OUTLINE_WIDTH},{SUBTITLE_SHADOW_OFFSET},2,50,50,{SUBTITLE_BOTTOM_MARGIN},1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
+    header = _build_ass_header(
+        font_name=SUBTITLE_FONT_NAME,
+        font_size=SUBTITLE_FONT_SIZE,
+        outline_width=SUBTITLE_OUTLINE_WIDTH,
+        shadow_offset=SUBTITLE_SHADOW_OFFSET,
+        outline_color="&H00000000",
+        bottom_margin=SUBTITLE_BOTTOM_MARGIN
+    )
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(header)
@@ -230,6 +239,86 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     text_escaped = text_escaped[:best_pos] + "\\N" + text_escaped[best_pos:]
 
             f.write(f"Dialogue: 0,{start_time},{end_time},Default,,0,0,0,,{text_escaped}\n")
+
+
+def generate_ass_from_segments_with_style(
+    segments: list,
+    output_path: str,
+    *,
+    font_name: str,
+    font_size: int,
+    outline_width: int,
+    shadow_offset: int,
+    outline_color: str,
+    bottom_margin: int
+) -> None:
+    """
+    スタイルを指定してASS字幕ファイルを生成（カスタム用）
+    """
+    header = _build_ass_header(
+        font_name=font_name,
+        font_size=font_size,
+        outline_width=outline_width,
+        shadow_offset=shadow_offset,
+        outline_color=outline_color,
+        bottom_margin=bottom_margin
+    )
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(header)
+
+        for segment in segments:
+            start_time = format_timestamp_ass(segment["start"])
+            end_time = format_timestamp_ass(segment["end"])
+            text = segment["text"].strip().replace("\n", "\\N")
+
+            text_escaped = text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+
+            if len(text) > SUBTITLE_LINE_BREAK_THRESHOLD:
+                mid = len(text) // 2
+                break_chars = ['、', '。', 'が', 'て', 'で', 'し', 'を', 'は', 'の', 'と']
+                best_pos = mid
+                min_dist = len(text)
+
+                for char in break_chars:
+                    pos = text.find(char, max(0, mid - 10), min(len(text), mid + 10))
+                    if pos != -1:
+                        dist = abs(pos - mid)
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_pos = pos + 1
+
+                if best_pos > 0 and best_pos < len(text):
+                    text_escaped = text_escaped[:best_pos] + "\\N" + text_escaped[best_pos:]
+
+            f.write(f"Dialogue: 0,{start_time},{end_time},Default,,0,0,0,,{text_escaped}\n")
+
+
+def _build_ass_header(
+    *,
+    font_name: str,
+    font_size: int,
+    outline_width: int,
+    shadow_offset: int,
+    outline_color: str,
+    bottom_margin: int
+) -> str:
+    """ASSヘッダー文字列を生成"""
+    return f"""[Script Info]
+Title: Whisper Subtitles
+ScriptType: v4.00+
+WrapStyle: 2
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,{font_name},{font_size},&H00FFFFFF,&H000000FF,{outline_color},&H80000000,-1,0,0,0,100,100,0,0,1,{outline_width},{shadow_offset},2,50,50,{bottom_margin},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
 
 
 def generate_subtitles_with_whisper(
@@ -292,10 +381,23 @@ def generate_subtitles_with_whisper(
         ass_output_path = output_path.replace(".srt", ".ass")
         print(f"Generating ASS file (styled subtitles)...")
         generate_ass_from_segments(result["segments"], ass_output_path)
+        # 強調版も併せて生成
+        alt_ass_output_path = ass_output_path.replace(".ass", "_bold.ass")
+        generate_ass_from_segments_with_style(
+            result["segments"],
+            alt_ass_output_path,
+            font_name=SUBTITLE_FONT_NAME,
+            font_size=SUBTITLE_BOLD_FONT_SIZE,
+            outline_width=SUBTITLE_BOLD_OUTLINE_WIDTH,
+            shadow_offset=SUBTITLE_BOLD_SHADOW_OFFSET,
+            outline_color=SUBTITLE_BOLD_OUTLINE_COLOR,
+            bottom_margin=SUBTITLE_BOLD_BOTTOM_MARGIN
+        )
 
         print(f"✓ Subtitles generated:")
         print(f"  SRT: {output_path}")
         print(f"  ASS: {ass_output_path}")
+        print(f"  ASS (bold): {alt_ass_output_path}")
         print(f"  Detected language: {result.get('language', 'unknown')}")
         print(f"  Number of segments: {len(result['segments'])}")
 

@@ -30,6 +30,7 @@ class ClipConfig:
     crop_left_percent: float = 0.0
     crop_right_percent: float = 0.0
     chat_delay_seconds: float = 0.0  # ライブチャット表示の遅延（秒）
+    subtitle_style: str = "normal"  # 字幕スタイル（normal|bold）
     next_config: Optional[str] = None  # 次の設定ファイルパス（連鎖処理用）
 
     def validate(self) -> None:
@@ -136,6 +137,11 @@ def load_config_from_file(config_path: str) -> ClipConfig:
     # チャットディレイを取得
     chat_delay = float(config_dict.get("CHAT_DELAY_SECONDS", 0.0))
 
+    # 字幕スタイルを取得
+    subtitle_style = str(config_dict.get("SUBTITLE_STYLE", "normal")).strip().lower()
+    if subtitle_style not in ("normal", "bold"):
+        raise ValueError("SUBTITLE_STYLE must be 'normal' or 'bold'")
+
     # 次の設定ファイルパスを取得
     next_config = config_dict.get("NEXT_CONFIG")
 
@@ -154,6 +160,7 @@ def load_config_from_file(config_path: str) -> ClipConfig:
         crop_left_percent=crop_left,
         crop_right_percent=crop_right,
         chat_delay_seconds=chat_delay,
+        subtitle_style=subtitle_style,
         next_config=next_config,
     )
 
@@ -214,6 +221,9 @@ TEMP_DIR=data/temp
 # 例: チャットが10秒遅れている場合 → CHAT_DELAY_SECONDS=10（チャットを10秒早める）
 # 例: チャットが10秒早い場合 → CHAT_DELAY_SECONDS=-10（チャットを10秒遅らせる）
 # CHAT_DELAY_SECONDS=0
+
+# 字幕スタイル（normal または bold）
+# SUBTITLE_STYLE=normal
 
 # 次の設定ファイル（任意、複数の切り抜きを連結する場合に指定）
 # 指定した場合、このクリップの後に次の設定ファイルで定義されたクリップが連結されます
