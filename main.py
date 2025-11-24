@@ -500,7 +500,9 @@ def process_single_clip(config: Any, clip_index: int) -> tuple:
                 chat_clip_path,
                 config.start_time,
                 config.end_time,
-                delay_seconds=config.chat_delay_seconds
+                delay_seconds=config.chat_delay_seconds,
+                dedup_window_seconds=config.chat_dedup_window_seconds,
+                dedup_by_author=config.chat_dedup_by_author
             )
             if count == 0:
                 chat_clip_path = None
@@ -743,7 +745,9 @@ def run_rechat_pipeline(config_path: str) -> bool:
             chat_clip_path,
             config.start_time,
             config.end_time,
-            delay_seconds=config.chat_delay_seconds
+            delay_seconds=config.chat_delay_seconds,
+            dedup_window_seconds=config.chat_dedup_window_seconds,
+            dedup_by_author=config.chat_dedup_by_author
         )
         if count == 0:
             print("  Warning: No chat messages in the specified time range")
@@ -1329,7 +1333,9 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
                 chat_clip_path,
                 config.start_time,
                 config.end_time,
-                delay_seconds=config.chat_delay_seconds
+                delay_seconds=config.chat_delay_seconds,
+                dedup_window_seconds=config.chat_dedup_window_seconds,
+                dedup_by_author=config.chat_dedup_by_author
             )
             if count == 0:
                 chat_clip_path = None

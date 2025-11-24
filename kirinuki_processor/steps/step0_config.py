@@ -30,6 +30,8 @@ class ClipConfig:
     crop_left_percent: float = 0.0
     crop_right_percent: float = 0.0
     chat_delay_seconds: float = 0.0  # ライブチャット表示の遅延（秒）
+    chat_dedup_window_seconds: float = 0.0  # 同一コメント連投を除外する時間窓（秒）
+    chat_dedup_by_author: bool = False  # 投稿者も考慮して重複判定するか
     subtitle_style: str = "normal"  # 字幕スタイル（normal|bold）
     next_config: Optional[str] = None  # 次の設定ファイルパス（連鎖処理用）
 
@@ -136,6 +138,8 @@ def load_config_from_file(config_path: str) -> ClipConfig:
 
     # チャットディレイを取得
     chat_delay = float(config_dict.get("CHAT_DELAY_SECONDS", 0.0))
+    chat_dedup_window = float(config_dict.get("CHAT_DEDUP_WINDOW_SECONDS", 0.0))
+    chat_dedup_by_author = str(config_dict.get("CHAT_DEDUP_BY_AUTHOR", "false")).strip().lower() in ["1", "true", "yes", "on"]
 
     # 字幕スタイルを取得
     subtitle_style = str(config_dict.get("SUBTITLE_STYLE", "normal")).strip().lower()
@@ -160,6 +164,8 @@ def load_config_from_file(config_path: str) -> ClipConfig:
         crop_left_percent=crop_left,
         crop_right_percent=crop_right,
         chat_delay_seconds=chat_delay,
+        chat_dedup_window_seconds=chat_dedup_window,
+        chat_dedup_by_author=chat_dedup_by_author,
         subtitle_style=subtitle_style,
         next_config=next_config,
     )
@@ -221,6 +227,10 @@ TEMP_DIR=data/temp
 # 例: チャットが10秒遅れている場合 → CHAT_DELAY_SECONDS=10（チャットを10秒早める）
 # 例: チャットが10秒早い場合 → CHAT_DELAY_SECONDS=-10（チャットを10秒遅らせる）
 # CHAT_DELAY_SECONDS=0
+
+# チャットの重複フィルタ（同じ内容が連投される場合に抑制）
+CHAT_DEDUP_WINDOW_SECONDS=15
+CHAT_DEDUP_BY_AUTHOR=true
 
 # 字幕スタイル（normal または bold）
 # SUBTITLE_STYLE=normal

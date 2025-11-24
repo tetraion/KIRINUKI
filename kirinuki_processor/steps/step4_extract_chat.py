@@ -101,12 +101,44 @@ def extract_chat_messages(
     return extracted
 
 
+def deduplicate_messages(
+    messages: List[ChatMessage],
+    window_seconds: float = 0.0,
+    by_author: bool = False
+) -> List[ChatMessage]:
+    """
+    短時間に連投された同一コメントを除外する
+
+    Args:
+        messages: 調整済みチャットメッセージ
+        window_seconds: この秒数以内に同じコメントがあればスキップ（0以下で無効）
+        by_author: Trueなら投稿者も含めて比較
+    """
+    if window_seconds <= 0 or not messages:
+        return messages
+
+    last_seen: Dict[str, float] = {}
+    filtered: List[ChatMessage] = []
+
+    for msg in messages:
+        key = (msg.message, msg.author) if by_author else msg.message
+        last_time = last_seen.get(key)
+        if last_time is not None and (msg.time_in_seconds - last_time) < window_seconds:
+            continue
+        last_seen[key] = msg.time_in_seconds
+        filtered.append(msg)
+
+    return filtered
+
+
 def load_and_extract_chat(
     input_path: str,
     output_path: str,
     start_time: str,
     end_time: Optional[str] = None,
-    delay_seconds: float = 0.0
+    delay_seconds: float = 0.0,
+    dedup_window_seconds: float = 0.0,
+    dedup_by_author: bool = False
 ) -> int:
     """
     チャットファイルを読み込み、区間抽出して保存
@@ -152,6 +184,8 @@ def load_and_extract_chat(
 
     # 区間抽出
     extracted = extract_chat_messages(messages, start_offset, end_offset, delay_seconds)
+    # 重複コメントの抑制
+    extracted = deduplicate_messages(extracted, window_seconds=dedup_window_seconds, by_author=dedup_by_author)
 
     # JSON形式で保存（整形して読みやすく）
     with open(output_path, "w", encoding="utf-8") as f:
@@ -170,6 +204,9 @@ def load_and_extract_chat(
         print(f"  End time: {end_time} ({end_offset}s)")
     if delay_seconds != 0:
         print(f"  Chat delay: {delay_seconds}s")
+    if dedup_window_seconds > 0:
+        mode = "author+message" if dedup_by_author else "message"
+        print(f"  Dedup: {dedup_window_seconds}s window ({mode})")
 
     return len(extracted)
 
