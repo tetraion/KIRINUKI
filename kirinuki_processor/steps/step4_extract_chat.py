@@ -144,7 +144,11 @@ def load_and_extract_chat(
 
     # 時間を秒数に変換
     start_offset = parse_time(start_time)
-    end_offset = parse_time(end_time) if end_time else None
+    # end_timeは動画全体のタイムスタンプなので、クリップ長に変換する
+    end_offset = parse_time(end_time) - start_offset if end_time else None
+    if end_offset is not None and end_offset < 0:
+        # クリップ長が負になるのは不正なので無効化
+        end_offset = None
 
     # 区間抽出
     extracted = extract_chat_messages(messages, start_offset, end_offset, delay_seconds)

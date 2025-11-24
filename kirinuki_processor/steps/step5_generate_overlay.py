@@ -153,6 +153,7 @@ def generate_chat_overlay(
             best_lane = 0
             best_start = float("inf")
             for lane_idx in range(config.lane_count):
+                # lane_available_times は「先行コメントの頭出しから、自身の幅分進むまで + gap」の時刻
                 candidate_start = max(base_time, lane_available_times[lane_idx])
                 if candidate_start < best_start:
                     best_start = candidate_start
@@ -160,7 +161,8 @@ def generate_chat_overlay(
 
             start_time = best_start
             end_time = start_time + duration
-            lane_available_times[best_lane] = end_time + config.lane_gap
+            # 次のコメントが同じレーンを使えるのは、現在のコメントが自分の幅を移動した後
+            lane_available_times[best_lane] = start_time + (text_width / config.comment_speed) + config.lane_gap
 
             y_position = config.lane_top + (config.lane_spacing * best_lane)
             start_str = ass_time_format(start_time)
