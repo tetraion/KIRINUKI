@@ -9,7 +9,7 @@ import os
 import sys
 import argparse
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 # モジュールパスを追加
 sys.path.insert(0, str(Path(__file__).parent))
@@ -355,11 +355,27 @@ def crop_video(input_path: str, output_path: str, crop_top: float, crop_bottom: 
         result = subprocess.run(cmd_probe, capture_output=True, text=True, check=True)
         width, height = map(int, result.stdout.strip().split(','))
 
-        # クロップ量を計算
+        # 指定のクロップ率で暫定サイズを算出
         crop_w = int(width * (1 - (crop_left + crop_right) / 100))
         crop_h = int(height * (1 - (crop_top + crop_bottom) / 100))
         crop_x = int(width * crop_left / 100)
         crop_y = int(height * crop_top / 100)
+
+        # 高さを基準に16:9へ合わせる（余白なし）。横で調整しきれない場合のみ高さをさらに削る
+        target_aspect = 16 / 9
+        desired_w_from_h = int(crop_h * target_aspect)
+
+        if desired_w_from_h <= crop_w and desired_w_from_h > 0:
+            # 幅が十分あるので左右を削って16:9に
+            reduce_w = crop_w - desired_w_from_h
+            crop_x += reduce_w // 2
+            crop_w = desired_w_from_h
+        else:
+            # 幅が足りない場合のみ高さ側を削って合わせる
+            desired_h_from_w = int(crop_w / target_aspect)
+            reduce_h = crop_h - desired_h_from_w
+            crop_y += reduce_h // 2
+            crop_h = desired_h_from_w
 
         # FFmpegでクロップ
         cmd = [
@@ -388,6 +404,37 @@ def crop_video(input_path: str, output_path: str, crop_top: float, crop_bottom: 
     except Exception as e:
         print(f"Unexpected error cropping video: {e}")
         return False
+
+
+def apply_crop_or_copy(raw_video_path: str, cropped_path: str, config: Any) -> Optional[str]:
+    """
+    クロップ設定に応じてクロップを適用し、出力パスを返す（クロップなしならコピー）
+    """
+    has_crop = (config.crop_top_percent != 0 or config.crop_bottom_percent != 0 or
+                config.crop_left_percent != 0 or config.crop_right_percent != 0)
+    try:
+        if has_crop:
+            print(f"\n[Crop] Applying crop settings...")
+            print(f"  Top: {config.crop_top_percent}%, Bottom: {config.crop_bottom_percent}%")
+            print(f"  Left: {config.crop_left_percent}%, Right: {config.crop_right_percent}%")
+            success = crop_video(
+                raw_video_path,
+                cropped_path,
+                config.crop_top_percent,
+                config.crop_bottom_percent,
+                config.crop_left_percent,
+                config.crop_right_percent
+            )
+            if not success:
+                print("✗ Failed to crop video")
+                return None
+        else:
+            import shutil
+            shutil.copy2(raw_video_path, cropped_path)
+        return cropped_path
+    except Exception as e:
+        print(f"✗ Error in cropping: {e}")
+        return None
 
 
 def process_single_clip(config: Any, clip_index: int) -> tuple:
@@ -448,18 +495,11 @@ def process_single_clip(config: Any, clip_index: int) -> tuple:
         print(f"\n[Clip {clip_index + 1}] Applying crop settings...")
         print(f"  Top: {config.crop_top_percent}%, Bottom: {config.crop_bottom_percent}%")
         print(f"  Left: {config.crop_left_percent}%, Right: {config.crop_right_percent}%")
-        success = crop_video(
-            raw_video_path,
-            clip_video_path,
-            config.crop_top_percent,
-            config.crop_bottom_percent,
-            config.crop_left_percent,
-            config.crop_right_percent
-        )
-        if not success:
+        cropped = apply_crop_or_copy(raw_video_path, clip_video_path, config)
+        if not cropped:
             print(f"✗ Failed to crop video for clip {clip_index + 1}")
             return None, None, None
-        video_source_path = clip_video_path
+        video_source_path = cropped
         print(f"✓ Video cropped successfully")
     else:
         # クロップ不要の場合はコピー
@@ -1157,15 +1197,8 @@ def run_compose_pipeline(config_path: str) -> bool:
         if title_overlay_path:
             overlays.append(title_overlay_path)
 
-        # 複数クリップの場合、各クリップは既にクロップ済みなのでクロップ設定は0にする
-        if clip_count > 1:
-            crop_top = crop_bottom = crop_left = crop_right = 0.0
-        else:
-            # 単一クリップの場合は従来通りクロップ設定を使用
-            crop_top = base_config.crop_top_percent
-            crop_bottom = base_config.crop_bottom_percent
-            crop_left = base_config.crop_left_percent
-            crop_right = base_config.crop_right_percent
+        # すべてのクリップが既にStep0でクロップ済みのため、compose時は再クロップしない
+        crop_top = crop_bottom = crop_left = crop_right = 0.0
 
         success = compose_video(
             video_source_path,
@@ -1253,6 +1286,7 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
 
     # ファイルパスを定義
     clip_video_path = os.path.join(config.temp_dir, "clip.webm")
+    clip_video_raw_path = os.path.join(config.temp_dir, "clip_raw.webm")
     subs_full_path = os.path.join(config.temp_dir, "subs_full.srt")
     subs_clip_path = os.path.join(config.temp_dir, "subs_clip.srt")
     chat_full_path = os.path.join(config.temp_dir, "chat_full.json")
@@ -1260,9 +1294,8 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
     chat_overlay_path = os.path.join(config.temp_dir, "chat_overlay.ass")
     final_output_path = os.path.join(config.output_dir, "final.mp4")
 
-    # 動画ファイルのパスを決定
+    # 動画ファイルのパスを決定（raw→crop→clip.webm に統一）
     if config.auto_download:
-        # 自動ダウンロードモード
         if 0 not in skip_steps:
             print("\n[Step 0] Downloading and clipping video from YouTube...")
             try:
@@ -1270,26 +1303,30 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
                     config.video_url,
                     config.start_time,
                     config.end_time,
-                    clip_video_path,
-                    download_full=False  # 範囲指定ダウンロードを試みる
+                    clip_video_raw_path,
+                    download_full=False
                 )
                 if not success:
                     print("✗ Failed to download and clip video")
                     return False
-                video_source_path = clip_video_path
             except Exception as e:
                 print(f"✗ Error in Step 0: {e}")
                 return False
         else:
-            print("\n[Step 0] Skipped (assuming video already exists)")
-            video_source_path = clip_video_path
+            print("\n[Step 0] Skipped download (assuming raw clip already exists)")
+        raw_video_path = clip_video_raw_path
     else:
-        # 既存ファイルモード
         print("\n[Step 0] Using existing video file")
         if not config.webm_path:
             print("✗ WEBM_PATH is required when AUTO_DOWNLOAD=false")
             return False
-        video_source_path = config.webm_path
+        raw_video_path = config.webm_path
+
+    # クロップ適用（skipしていてもクロップは行う）
+    cropped = apply_crop_or_copy(raw_video_path, clip_video_path, config)
+    if not cropped:
+        return False
+    video_source_path = cropped
 
     # ステップ1: Whisper字幕生成
     if 1 not in skip_steps:
@@ -1406,6 +1443,64 @@ def run_full_pipeline(config_path: str, skip_steps: list = None) -> bool:
     print(f"  Final output: {final_output_path}")
     print("=" * 60)
 
+    return True
+
+
+def run_crop_step(config_path: str) -> bool:
+    """
+    Step0.5: 既存のclip_raw.webmにクロップを適用してclip.webmを生成する。
+    clip_raw.webmが無ければStep0同様にダウンロードしてからクロップする。
+    """
+    try:
+        config = load_config_from_file(config_path)
+    except Exception as e:
+        print(f"✗ Failed to load configuration: {e}")
+        return False
+
+    os.makedirs(config.temp_dir, exist_ok=True)
+    clip_raw_path = os.path.join(config.temp_dir, "clip_raw.webm")
+    clip_cropped_path = os.path.join(config.temp_dir, "clip.webm")
+
+    # ソース動画を準備
+    if os.path.exists(clip_raw_path):
+        print(f"✓ Found existing raw clip: {clip_raw_path}")
+        raw_video_path = clip_raw_path
+    else:
+        if config.auto_download:
+            print("\n[Step0.5] Downloading video section (Step0 equivalent)...")
+            success = download_and_clip_video(
+                config.video_url,
+                config.start_time,
+                config.end_time,
+                clip_raw_path,
+                download_full=False
+            )
+            if not success:
+                print("✗ Failed to download video")
+                return False
+            raw_video_path = clip_raw_path
+        else:
+            if not config.webm_path or not os.path.exists(config.webm_path):
+                print("✗ clip_raw.webm not found and WEBM_PATH is invalid. Please run step0 or set WEBM_PATH.")
+                return False
+            raw_video_path = config.webm_path
+            import shutil
+            shutil.copy2(raw_video_path, clip_raw_path)
+
+    print("\n[Step0.5] Applying crop...")
+    print(f"  Top: {config.crop_top_percent}%, Bottom: {config.crop_bottom_percent}%")
+    print(f"  Left: {config.crop_left_percent}%, Right: {config.crop_right_percent}%")
+    cropped = apply_crop_or_copy(
+        raw_video_path,
+        clip_cropped_path,
+        config
+    )
+    if not cropped:
+        print("✗ Crop failed")
+        return False
+
+    print(f"✓ Cropped clip saved: {clip_cropped_path}")
+    print("Next: run step1/prepare/compose as needed.")
     return True
 
 
@@ -1753,6 +1848,11 @@ def run_single_step(step_num: float, args: argparse.Namespace) -> bool:
         )
         return success
 
+    elif step_num == 0.5:
+        # クロップのみ（configを読み、clip_raw→clipに適用）
+        success = run_crop_step(args.config)
+        return success
+
     elif step_num == 1:
         # Whisper字幕生成
         success = generate_subtitles_with_whisper(
@@ -1868,15 +1968,9 @@ def main():
     clear_parser.add_argument("config", help="Configuration file path")
     clear_parser.add_argument("--keep-videos", action="store_true", help="Keep video files (clip*.webm) and only delete subtitles/chat files")
 
-    # フルパイプライン実行
-    pipeline_parser = subparsers.add_parser("run", help="Run full pipeline (all steps including video composition)")
+    # フルパイプライン実行（prepare→composeの順に全ステップ実行）
+    pipeline_parser = subparsers.add_parser("run", help="Run full pipeline (prepare then compose)")
     pipeline_parser.add_argument("config", help="Configuration file path")
-    pipeline_parser.add_argument(
-        "--skip",
-        nargs="+",
-        type=int,
-        help="Steps to skip (e.g., --skip 1 3)"
-    )
 
     # サンプル設定ファイル作成
     sample_parser = subparsers.add_parser("init", help="Create sample config file")
@@ -1898,6 +1992,10 @@ def main():
     step0_parser.add_argument("-e", "--end", help="End time (hh:mm:ss)")
     step0_parser.add_argument("-o", "--output", required=True, help="Output video file")
     step0_parser.add_argument("--full", action="store_true", help="Download full video first (slower but more reliable)")
+
+    # Step 0.5 (クロップのみ)
+    step0_5_parser = subparsers.add_parser("step0.5", help="Apply crop to clip_raw.webm (download if missing) to create clip.webm")
+    step0_5_parser.add_argument("config", help="Configuration file path")
 
     # Step 1 (Whisper字幕生成)
     step1_parser = subparsers.add_parser("step1", help="Generate subtitles with Whisper")
@@ -1979,7 +2077,7 @@ def main():
             return 0 if success else 1
 
         elif args.command == "run":
-            success = run_full_pipeline(args.config, args.skip or [])
+            success = run_full_pipeline(args.config, [])
             return 0 if success else 1
 
         elif args.command == "init":
@@ -1988,6 +2086,10 @@ def main():
 
         elif args.command == "short":
             success = run_short_pipeline(args.config)
+            return 0 if success else 1
+
+        elif args.command == "step0.5":
+            success = run_crop_step(args.config)
             return 0 if success else 1
 
         elif args.command.startswith("step"):

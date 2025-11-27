@@ -74,8 +74,8 @@ def compose_video(
     # ロゴがある場合はfilter_complexを使用
     filters = []
 
-    target_width = config_video_width = None
-    target_height = config_video_height = None
+    # 入力解像度（スケールは基本せず、クロップ後の高さを基準に16:9へ切り出す）
+    target_width = target_height = None
     if os.path.exists(video_path):
         res = get_video_resolution(video_path)
         if res:
@@ -99,20 +99,32 @@ def compose_video(
         height_factor = 1.0 - top_frac - bottom_frac
         if width_factor <= 0 or height_factor <= 0:
             raise ValueError("Crop percentages remove the entire frame. Please reduce crop values.")
+        final_width_factor = width_factor
+        final_height_factor = height_factor
 
-        final_factor = min(width_factor, height_factor)
-        extra_width = max(0.0, width_factor - final_factor)
-        extra_height = max(0.0, height_factor - final_factor)
+        # ここから16:9に合わせてさらにクロップ（高さ基準で左右を削る方針、余白は作らない）
+        target_aspect = 16 / 9  # 目標アスペクト
+        input_aspect = target_width / target_height  # 入力映像のアスペクト
+        target_ratio = target_aspect / input_aspect  # final_width_factor / final_height_factor に求める比
 
-        left_frac += extra_width / 2
-        right_frac += extra_width / 2
-        top_frac += extra_height / 2
-        bottom_frac += extra_height / 2
+        desired_width_factor = final_height_factor * target_ratio
 
-        final_width_factor = 1.0 - left_frac - right_frac
-        final_height_factor = 1.0 - top_frac - bottom_frac
+        if desired_width_factor <= final_width_factor and desired_width_factor > 0:
+            # 十分な横幅があるので左右を削る
+            reduce = final_width_factor - desired_width_factor
+            left_frac += reduce / 2
+            right_frac += reduce / 2
+            final_width_factor = desired_width_factor
+        else:
+            # 高さ基準で足りない場合は、幅基準に切り替えて上下を削る
+            desired_height_factor = final_width_factor / target_ratio
+            reduce = final_height_factor - desired_height_factor
+            top_frac += reduce / 2
+            bottom_frac += reduce / 2
+            final_height_factor = desired_height_factor
+
         if final_width_factor <= 0 or final_height_factor <= 0:
-            raise ValueError("Invalid crop ratios after adjustment. Please check crop settings.")
+            raise ValueError("Invalid crop ratios after aspect adjustment. Please check crop settings.")
 
         crop_expr = (
             "crop="
@@ -124,8 +136,9 @@ def compose_video(
         video_filters.append(crop_expr)
         crop_applied = True
 
-    if crop_applied:
-        video_filters.append(f"scale={target_width}:{target_height}")
+    # スケールは行わず、元解像度ベースのまま出力する
+    # 出力では常にピクセルアスペクト比を1:1に固定し、表示倍率の誤差を防ぐ
+    video_filters.append("setsar=1")
 
     # 字幕、チャット、タイトルバーはクロップ/スケール後の映像に適用
     if subtitle_path and os.path.exists(subtitle_path):
