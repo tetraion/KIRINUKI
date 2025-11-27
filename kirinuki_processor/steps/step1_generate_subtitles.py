@@ -132,12 +132,10 @@ def convert_srt_to_ass(input_srt: str, output_ass: str) -> None:
     if not segments:
         raise ValueError("No subtitle entries found in SRT")
 
-    generate_ass_from_segments(segments, output_ass)
-    # 併せて強調版（大・太・紺縁）も出力しておく
-    alt_output_ass = output_ass.replace(".ass", "_bold.ass")
+    # 1種類のみ出力: 大きめ・太め・紺縁の強調スタイルを subs_clip.ass として生成
     generate_ass_from_segments_with_style(
         segments,
-        alt_output_ass,
+        output_ass,
         font_name=SUBTITLE_FONT_NAME,
         font_size=SUBTITLE_BOLD_FONT_SIZE,
         outline_width=SUBTITLE_BOLD_OUTLINE_WIDTH,
@@ -380,12 +378,9 @@ def generate_subtitles_with_whisper(
         # ASSファイルも生成（スタイル付き字幕用）
         ass_output_path = output_path.replace(".srt", ".ass")
         print(f"Generating ASS file (styled subtitles)...")
-        generate_ass_from_segments(result["segments"], ass_output_path)
-        # 強調版も併せて生成
-        alt_ass_output_path = ass_output_path.replace(".ass", "_bold.ass")
         generate_ass_from_segments_with_style(
             result["segments"],
-            alt_ass_output_path,
+            ass_output_path,
             font_name=SUBTITLE_FONT_NAME,
             font_size=SUBTITLE_BOLD_FONT_SIZE,
             outline_width=SUBTITLE_BOLD_OUTLINE_WIDTH,
@@ -397,7 +392,6 @@ def generate_subtitles_with_whisper(
         print(f"✓ Subtitles generated:")
         print(f"  SRT: {output_path}")
         print(f"  ASS: {ass_output_path}")
-        print(f"  ASS (bold): {alt_ass_output_path}")
         print(f"  Detected language: {result.get('language', 'unknown')}")
         print(f"  Number of segments: {len(result['segments'])}")
 
