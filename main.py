@@ -321,7 +321,8 @@ def adjust_ass_time(time_str: str, offset_seconds: float) -> str:
 
 
 def crop_video(input_path: str, output_path: str, crop_top: float, crop_bottom: float,
-               crop_left: float, crop_right: float) -> bool:
+               crop_left: float, crop_right: float,
+               target_width: Optional[int] = None, target_height: Optional[int] = None) -> bool:
     """
     動画をクロップする
 
@@ -377,11 +378,15 @@ def crop_video(input_path: str, output_path: str, crop_top: float, crop_bottom: 
             crop_y += reduce_h // 2
             crop_h = desired_h_from_w
 
-        # FFmpegでクロップ
+        # FFmpegでクロップ（必要に応じてスケール）
+        filters = [f'crop={crop_w}:{crop_h}:{crop_x}:{crop_y}']
+        if target_width and target_height:
+            filters.append(f'scale={target_width}:{target_height}')
+
         cmd = [
             'ffmpeg', '-y',
             '-i', input_path,
-            '-vf', f'crop={crop_w}:{crop_h}:{crop_x}:{crop_y}',
+            '-vf', ",".join(filters),
             '-c:v', 'libvpx-vp9',
             '-crf', str(DEFAULT_CROP_CRF),
             '-b:v', str(DEFAULT_CROP_BITRATE),
@@ -423,7 +428,9 @@ def apply_crop_or_copy(raw_video_path: str, cropped_path: str, config: Any) -> O
                 config.crop_top_percent,
                 config.crop_bottom_percent,
                 config.crop_left_percent,
-                config.crop_right_percent
+                config.crop_right_percent,
+                target_width=1920,
+                target_height=1080
             )
             if not success:
                 print("✗ Failed to crop video")
