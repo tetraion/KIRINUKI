@@ -6,6 +6,7 @@ ASS字幕ファイルとして生成する。
 """
 
 import json
+import random
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
@@ -38,7 +39,7 @@ class OverlayConfig:
     lane_gap: float = CHAT_LANE_GAP
 
     # タイムオフセット
-    visible_start_offset: float = 5.0  # 切り抜き冒頭から表示
+    visible_start_offset: float = 3.0  # 切り抜き冒頭から表示
 
     # 移動パラメータ
     comment_speed: float = CHAT_COMMENT_SPEED
@@ -150,9 +151,11 @@ def generate_chat_overlay(
             duration = travel_distance / config.comment_speed
 
             # 使用するレーンを決定（最も早く空くものを選択）
+            lane_indices = list(range(config.lane_count))
+            random.shuffle(lane_indices)  # レーン使用順をランダム化して偏りを減らす
             best_lane = 0
             best_start = float("inf")
-            for lane_idx in range(config.lane_count):
+            for lane_idx in lane_indices:
                 # lane_available_times は「先行コメントの頭出しから、自身の幅分進むまで + gap」の時刻
                 candidate_start = max(base_time, lane_available_times[lane_idx])
                 if candidate_start < best_start:

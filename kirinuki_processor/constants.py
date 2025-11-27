@@ -68,11 +68,10 @@ LOGO_ANIMATION_DURATION = TITLE_BAR_SLIDE_DURATION
 # ============================================================================
 
 # ニコニコ動画風コメントのレーン数
-CHAT_LANE_COUNT = 10
+CHAT_LANE_COUNT = 9
 
 # コメント表示開始Y座標（タイトルバーと被らない位置）
-# 下部字幕と被らないよう、従来より約1.5行分(90px)上にシフト
-CHAT_LANE_TOP = TITLE_BAR_MARGIN_TOP + TITLE_BAR_HEIGHT + 50
+CHAT_LANE_TOP = TITLE_BAR_MARGIN_TOP + TITLE_BAR_HEIGHT + 70
 
 # 各レーンの縦間隔（ピクセル）
 CHAT_LANE_SPACING = 60
