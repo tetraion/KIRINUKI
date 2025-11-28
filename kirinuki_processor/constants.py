@@ -135,6 +135,9 @@ SUBTITLE_BOLD_OUTLINE_COLOR = "&H005C2A0F"
 # 字幕の自動改行閾値（文字数）
 SUBTITLE_LINE_BREAK_THRESHOLD = 20
 
+# 1行あたりの最大文字数（超過分は次行へ送る）
+SUBTITLE_MAX_LINE_LENGTH = 20
+
 
 # ============================================================================
 # デフォルトディレクトリ

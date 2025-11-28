@@ -23,7 +23,8 @@ from kirinuki_processor.constants import (
     SUBTITLE_BOLD_OUTLINE_COLOR,
     SUBTITLE_BOLD_BOTTOM_MARGIN,
     SUBTITLE_BOTTOM_MARGIN,
-    SUBTITLE_LINE_BREAK_THRESHOLD
+    SUBTITLE_LINE_BREAK_THRESHOLD,
+    SUBTITLE_MAX_LINE_LENGTH
 )
 
 
@@ -95,6 +96,61 @@ def format_timestamp_ass(seconds: float) -> str:
     secs = int(seconds % 60)
     centisecs = int((seconds % 1) * 100)
     return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
+
+
+def _wrap_text_by_threshold(text: str, threshold: int, max_lines: int = 2, max_line_len: int = 0) -> list[str]:
+    """
+    長い文を閾値に合わせて複数行に分割（最大max_lines行）
+    改行箇所は句読点優先。max_linesを超える分は最後の行にまとめる。
+    """
+    if threshold <= 0 or len(text) <= threshold:
+        return [text]
+
+    break_chars = ['、', '。', 'が', 'て', 'で', 'し', 'を', 'は', 'の', 'と']
+    lines = []
+    remaining = text
+
+    while len(remaining) > threshold and len(lines) < max_lines:
+        mid = min(len(remaining) // 2, threshold)
+        best_pos = mid
+        min_dist = len(remaining)
+        # mid付近±10文字に句読点があれば優先
+        for char in break_chars:
+            pos = remaining.find(char, max(0, mid - 10), min(len(remaining), mid + 10))
+            if pos != -1:
+                dist = abs(pos - mid)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_pos = pos + 1
+
+        # 安全策: 0や末尾にはしない
+        if best_pos <= 0 or best_pos >= len(remaining):
+            best_pos = threshold
+
+        lines.append(remaining[:best_pos])
+        remaining = remaining[best_pos:].lstrip()
+
+        # max_lines-1 までで切る。次で終了させるため残り全部を最後に詰める。
+        if len(lines) == max_lines - 1:
+            break
+
+    if remaining:
+        lines.append(remaining)
+
+    # 1行あたりの最大長を超えている場合、次の行へ送る
+    if max_line_len and lines:
+        if len(lines[0]) > max_line_len:
+            overflow = lines[0][max_line_len:]
+            lines[0] = lines[0][:max_line_len]
+            if len(lines) >= 2:
+                lines[1] = overflow + lines[1]
+            else:
+                lines.append(overflow)
+        if len(lines) >= 2 and len(lines[1]) > max_line_len:
+            # 2行目も超過している場合は末尾を切り出し（行数は増やさない）
+            lines[1] = lines[1][:max_line_len]
+
+    return lines
 
 
 def parse_srt_timestamp(timestamp: str) -> float:
@@ -210,31 +266,20 @@ def generate_ass_from_segments(segments: list, output_path: str) -> None:
         for segment in segments:
             start_time = format_timestamp_ass(segment["start"])
             end_time = format_timestamp_ass(segment["end"])
-            text = segment["text"].strip().replace("\n", "\\N")
-
-            # エスケープ処理（先に実行）
-            text_escaped = text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
-
-            # 長い文を自動改行
-            if len(text) > SUBTITLE_LINE_BREAK_THRESHOLD:
-                # 文の中間あたりで改行（句読点を優先）
-                mid = len(text) // 2
-                # 句読点を探す
-                break_chars = ['、', '。', 'が', 'て', 'で', 'し', 'を', 'は', 'の', 'と']
-                best_pos = mid
-                min_dist = len(text)
-
-                for char in break_chars:
-                    pos = text.find(char, max(0, mid - 10), min(len(text), mid + 10))
-                    if pos != -1:
-                        dist = abs(pos - mid)
-                        if dist < min_dist:
-                            min_dist = dist
-                            best_pos = pos + 1
-
-                # 改行を挿入（ASSの改行タグは\N）
-                if best_pos > 0 and best_pos < len(text):
-                    text_escaped = text_escaped[:best_pos] + "\\N" + text_escaped[best_pos:]
+            text = segment["text"].strip()
+            # 複数回の自動改行を適用（最大2行）
+            lines = _wrap_text_by_threshold(
+                text,
+                SUBTITLE_LINE_BREAK_THRESHOLD,
+                max_lines=2,
+                max_line_len=SUBTITLE_MAX_LINE_LENGTH
+            )
+            # エスケープ処理（行ごとに）
+            escaped_lines = [
+                line.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+                for line in lines
+            ]
+            text_escaped = "\\N".join(escaped_lines)
 
             f.write(f"Dialogue: 0,{start_time},{end_time},Default,,0,0,0,,{text_escaped}\n")
 
@@ -268,26 +313,18 @@ def generate_ass_from_segments_with_style(
         for segment in segments:
             start_time = format_timestamp_ass(segment["start"])
             end_time = format_timestamp_ass(segment["end"])
-            text = segment["text"].strip().replace("\n", "\\N")
-
-            text_escaped = text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
-
-            if len(text) > SUBTITLE_LINE_BREAK_THRESHOLD:
-                mid = len(text) // 2
-                break_chars = ['、', '。', 'が', 'て', 'で', 'し', 'を', 'は', 'の', 'と']
-                best_pos = mid
-                min_dist = len(text)
-
-                for char in break_chars:
-                    pos = text.find(char, max(0, mid - 10), min(len(text), mid + 10))
-                    if pos != -1:
-                        dist = abs(pos - mid)
-                        if dist < min_dist:
-                            min_dist = dist
-                            best_pos = pos + 1
-
-                if best_pos > 0 and best_pos < len(text):
-                    text_escaped = text_escaped[:best_pos] + "\\N" + text_escaped[best_pos:]
+            text = segment["text"].strip()
+            lines = _wrap_text_by_threshold(
+                text,
+                SUBTITLE_LINE_BREAK_THRESHOLD,
+                max_lines=2,
+                max_line_len=SUBTITLE_MAX_LINE_LENGTH
+            )
+            escaped_lines = [
+                line.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+                for line in lines
+            ]
+            text_escaped = "\\N".join(escaped_lines)
 
             f.write(f"Dialogue: 0,{start_time},{end_time},Default,,0,0,0,,{text_escaped}\n")
 
